@@ -30,6 +30,13 @@ return [
 
     'disks' => [
 
+        'private' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/bank-documents'),
+            'visibility' => 'private',
+            'throw' => true,
+        ],
+
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),

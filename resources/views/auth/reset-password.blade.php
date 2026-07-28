@@ -1,0 +1,4 @@
+<x-layout title="New password" :guest="true"><section class="auth-card single"><h2>Choose a new password</h2><p class="muted">Use at least 12 characters, with uppercase and lowercase letters and a number.</p><form method="post" action="{{ route('password.update') }}">
+@csrf<input type="hidden" name="token" value="{{ $token }}"><label for="email">Work email</label><input id="email" type="email" name="email" value="{{ old('email', $email) }}" required><label for="password">New password</label><input id="password" name="password" type="password" autocomplete="new-password" required><label for="confirmation">Confirm password</label><input id="confirmation" name="password_confirmation" type="password" autocomplete="new-password" required><button class="button full">Update password</button></form>
+</section>
+</x-layout>

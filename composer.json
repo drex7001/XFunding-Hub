@@ -1,8 +1,8 @@
 {
   "$schema": "https://getcomposer.org/schema.json",
-  "name": "xfunding/loan-api",
+  "name": "xfunding/interbank-marketplace",
   "type": "project",
-  "description": "XFunding Hub loan application API",
+  "description": "B2B interbank liquidity marketplace with bank-scoped access and blind bidding",
   "keywords": [
     "laravel",
     "framework"
@@ -16,6 +16,7 @@
   },
   "require-dev": {
     "fakerphp/faker": "^1.23",
+    "laravel/boost": "^2.10",
     "laravel/pail": "^1.2.5",
     "laravel/pao": "^1.0.6",
     "laravel/pint": "^1.27",

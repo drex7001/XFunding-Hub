@@ -1,10 +1,8 @@
 <?php
 
-use App\Http\Controllers\LoanApplicationController;
+use App\Http\Controllers\DemoPaymentNotificationController;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('v1/loan-applications')->group(function () {
-    Route::post('/', [LoanApplicationController::class, 'store']);
-    Route::get('/{application}', [LoanApplicationController::class, 'show'])->name('loan-applications.show');
-    Route::patch('/{application}/status', [LoanApplicationController::class, 'updateStatus']);
-});
+Route::post('/payments/demo/notifications', DemoPaymentNotificationController::class)->middleware('throttle:payment-notifications')->name('payments.demo.notify');
+
+// Session-authenticated v1 endpoints are registered in web.php with CSRF protection.
