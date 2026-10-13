@@ -4,8 +4,8 @@ use App\States\LoanApplicationState;
 
 dataset('state pairs', function () {
     $allowed = [
-        'SUBMITTED' => ['UNDER_REVIEW'],
-        'UNDER_REVIEW' => ['APPROVED', 'REJECTED'],
+        'SUBMITTED' => ['UNDER_REVIEW', 'CANCELLED'],
+        'UNDER_REVIEW' => ['APPROVED', 'REJECTED', 'CANCELLED'],
         'APPROVED' => ['DISBURSED'],
     ];
 
@@ -16,10 +16,15 @@ dataset('state pairs', function () {
     }
 });
 
-it('allows exactly the four specified transitions', function (string $from, string $to, bool $allowed) {
-    // No database or Laravel application is needed to inspect the state configuration.
-    expect(LoanApplicationState::config()->isTransitionAllowed(
-        $from::getMorphClass(),
-        $to::getMorphClass(),
-    ))->toBe($allowed);
+it('allows exactly the specified transitions', function (string $from, string $to, bool $allowed) {
+    // Arrange
+    $configuration = LoanApplicationState::config();
+    $source = $from::getMorphClass();
+    $target = $to::getMorphClass();
+
+    // Act
+    $canTransition = $configuration->isTransitionAllowed($source, $target);
+
+    // Assert
+    expect($canTransition)->toBe($allowed);
 })->with('state pairs');
