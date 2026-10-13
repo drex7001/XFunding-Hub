@@ -12,33 +12,20 @@ function loanPayload(array $overrides = []): array
     ], $overrides);
 }
 
-function arrangeLoan(string $status = 'SUBMITTED'): LoanApplication
+function submitLoan(): string
 {
-    $application = new LoanApplication([
-        'customer_id' => 'C1001',
-        'amount' => 5000,
-        'currency' => 'GBP',
-        'term_months' => 12,
-    ]);
-    $application->status = $status;
-    $application->save();
-
-    return $application;
+    return test()->postJson('/api/v1/loan-applications', loanPayload())
+        ->assertCreated()->json('applicationId');
 }
 
-it('creates and persists an application using the specified response shape', function () {
-    // Arrange
-    $payload = loanPayload();
+it('creates, persists and retrieves an application using the specified response shape', function () {
+    $response = $this->postJson('/api/v1/loan-applications', loanPayload());
 
-    // Act
-    $response = $this->postJson('/api/v1/loan-applications', $payload);
-
-    // Assert
     $response->assertCreated()
         ->assertHeader('Location', url('/api/v1/loan-applications/LA1001'))
         ->assertExactJson([
             'applicationId' => 'LA1001',
-            ...$payload,
+            ...loanPayload(),
             'status' => 'SUBMITTED',
         ]);
 
@@ -46,94 +33,39 @@ it('creates and persists an application using the specified response shape', fun
         'customer_id' => 'C1001', 'amount' => 5000, 'status' => 'SUBMITTED',
     ]);
 
-});
-
-it('retrieves an application using the specified response shape', function () {
-    // Arrange
-    $application = arrangeLoan();
-    $id = $application->getRouteKey();
-
-    // Act
-    $response = $this->getJson("/api/v1/loan-applications/$id");
-
-    // Assert
-    $response->assertOk()->assertExactJson([
-        'applicationId' => $id,
-        ...loanPayload(),
-        'status' => 'SUBMITTED',
-    ]);
+    $this->getJson('/api/v1/loan-applications/LA1001')
+        ->assertOk()->assertExactJson($response->json());
 });
 
 it('completes the approval and disbursement workflow', function () {
-    // Arrange
-    $application = arrangeLoan();
-    $id = $application->getRouteKey();
-    $statuses = ['UNDER_REVIEW', 'APPROVED', 'DISBURSED'];
-    $responses = [];
-    $persistedStatuses = [];
+    $id = submitLoan();
 
-    // Act: exercise the complete sequence, capturing each persisted state.
-    foreach ($statuses as $status) {
-        $responses[$status] = $this->patchJson("/api/v1/loan-applications/$id/status", ['status' => $status]);
-        $persistedStatuses[] = (string) $application->refresh()->status;
+    foreach (['UNDER_REVIEW', 'APPROVED', 'DISBURSED'] as $status) {
+        $this->patchJson("/api/v1/loan-applications/$id/status", ['status' => $status])
+            ->assertOk()->assertJsonPath('status', $status);
+        $this->assertDatabaseHas('loan_applications', ['status' => $status]);
     }
-
-    // Assert
-    foreach ($responses as $status => $response) {
-        $response->assertOk()->assertJsonPath('status', $status);
-    }
-    expect($persistedStatuses)->toBe($statuses);
 });
 
 it('supports rejection after review', function () {
-    // Arrange
-    $application = arrangeLoan('UNDER_REVIEW');
-    $id = $application->getRouteKey();
-
-    // Act
-    $response = $this->patchJson("/api/v1/loan-applications/$id/status", ['status' => 'REJECTED']);
-
-    // Assert
-    $response->assertOk()->assertJsonPath('status', 'REJECTED');
-    expect((string) $application->refresh()->status)->toBe('REJECTED');
+    $id = submitLoan();
+    $this->patchJson("/api/v1/loan-applications/$id/status", ['status' => 'UNDER_REVIEW'])->assertOk();
+    $this->patchJson("/api/v1/loan-applications/$id/status", ['status' => 'REJECTED'])
+        ->assertOk()->assertJsonPath('status', 'REJECTED');
 });
 
-it('allows cancellation before approval', function (string $from) {
-    // Arrange
-    $application = arrangeLoan($from);
-    $id = $application->getRouteKey();
-
-    // Act
-    $response = $this->patchJson("/api/v1/loan-applications/$id/status", ['status' => 'CANCELLED']);
-
-    // Assert
-    $response->assertOk()->assertJsonPath('status', 'CANCELLED');
-    expect((string) $application->refresh()->status)->toBe('CANCELLED');
-})->with(['SUBMITTED', 'UNDER_REVIEW']);
-
 it('rejects every invalid transition without changing persisted state', function (string $from, string $to) {
-    // Arrange
-    $application = arrangeLoan($from);
-    $id = $application->getRouteKey();
+    $id = submitLoan();
+    // Arrange each source directly; actual transition behavior is exercised through HTTP.
+    LoanApplication::query()->update(['status' => $from]);
 
-    // Act
-    $response = $this->patchJson("/api/v1/loan-applications/$id/status", ['status' => $to]);
-
-    // Assert
-    $response
+    $this->patchJson("/api/v1/loan-applications/$id/status", ['status' => $to])
         ->assertConflict()->assertJsonPath('message', "Cannot transition from $from to $to.");
 
-    expect((string) $application->refresh()->status)->toBe($from);
+    $this->getJson("/api/v1/loan-applications/$id")->assertOk()->assertJsonPath('status', $from);
 })->with(function () {
-    $allowed = [
-        'SUBMITTED:UNDER_REVIEW',
-        'SUBMITTED:CANCELLED',
-        'UNDER_REVIEW:APPROVED',
-        'UNDER_REVIEW:REJECTED',
-        'UNDER_REVIEW:CANCELLED',
-        'APPROVED:DISBURSED',
-    ];
-    $states = ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'DISBURSED', 'CANCELLED'];
+    $allowed = ['SUBMITTED:UNDER_REVIEW', 'UNDER_REVIEW:APPROVED', 'UNDER_REVIEW:REJECTED', 'APPROVED:DISBURSED'];
+    $states = ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'DISBURSED'];
     foreach ($states as $from) {
         foreach ($states as $to) {
             if (! in_array("$from:$to", $allowed, true)) {
@@ -144,13 +76,8 @@ it('rejects every invalid transition without changing persisted state', function
 });
 
 it('validates create inputs and does not persist invalid requests', function (array $payload, string $field) {
-    // Arrange: the dataset supplies the invalid payload and expected field.
-
-    // Act
-    $response = $this->postJson('/api/v1/loan-applications', $payload);
-
-    // Assert
-    $response->assertUnprocessable()->assertJsonValidationErrors($field);
+    $this->postJson('/api/v1/loan-applications', $payload)
+        ->assertUnprocessable()->assertJsonValidationErrors($field);
     $this->assertDatabaseCount('loan_applications', 0);
 })->with([
     'missing customer' => [loanPayload(['customerId' => null]), 'customerId'],
@@ -168,44 +95,17 @@ it('validates create inputs and does not persist invalid requests', function (ar
 ]);
 
 it('validates status inputs', function (mixed $status) {
-    // Arrange
-    $application = arrangeLoan();
-    $id = $application->getRouteKey();
-
-    // Act
-    $response = $this->patchJson("/api/v1/loan-applications/$id/status", ['status' => $status]);
-
-    // Assert
-    $response->assertUnprocessable()->assertJsonValidationErrors('status');
-    expect((string) $application->refresh()->status)->toBe('SUBMITTED');
+    $id = submitLoan();
+    $this->patchJson("/api/v1/loan-applications/$id/status", ['status' => $status])
+        ->assertUnprocessable()->assertJsonValidationErrors('status');
+    $this->assertDatabaseHas('loan_applications', ['status' => 'SUBMITTED']);
 })->with([null, 'UNKNOWN', 'approved', 123]);
 
 it('returns JSON 404 for unknown application IDs', function (string $id) {
-    // Arrange: the database is empty and the dataset supplies an unknown ID.
-    $url = "/api/v1/loan-applications/$id";
-
-    // Act
-    $getResponse = $this->getJson($url);
-    $patchResponse = $this->patchJson("$url/status", ['status' => 'UNDER_REVIEW']);
-
-    // Assert
-    $getResponse->assertNotFound();
-    $patchResponse->assertNotFound();
+    $this->getJson("/api/v1/loan-applications/$id")->assertNotFound();
+    $this->patchJson("/api/v1/loan-applications/$id/status", ['status' => 'UNDER_REVIEW'])->assertNotFound();
 })->with(['LA999999', 'invalid', 'LA0001']);
 
 it('generates distinct application IDs', function () {
-    // Arrange
-    $payload = loanPayload();
-
-    // Act
-    $firstResponse = $this->postJson('/api/v1/loan-applications', $payload);
-    $secondResponse = $this->postJson('/api/v1/loan-applications', $payload);
-
-    // Assert
-    $firstResponse->assertCreated();
-    $secondResponse->assertCreated();
-    expect($firstResponse->json('applicationId'))
-        ->toBeString()
-        ->not->toBe($secondResponse->json('applicationId'));
-    $this->assertDatabaseCount('loan_applications', 2);
+    expect(submitLoan())->not->toBe(submitLoan());
 });

@@ -12,10 +12,8 @@ abstract class LoanApplicationState extends State
         return parent::config()
             ->default(Submitted::class)
             ->allowTransition(Submitted::class, UnderReview::class)
-            ->allowTransition(Submitted::class, Cancelled::class)
             ->allowTransition(UnderReview::class, Approved::class)
             ->allowTransition(UnderReview::class, Rejected::class)
-            ->allowTransition(UnderReview::class, Cancelled::class)
             ->allowTransition(Approved::class, Disbursed::class);
     }
 
@@ -27,7 +25,6 @@ abstract class LoanApplicationState extends State
             'APPROVED' => Approved::class,
             'REJECTED' => Rejected::class,
             'DISBURSED' => Disbursed::class,
-            'CANCELLED' => Cancelled::class,
         ];
     }
 }
