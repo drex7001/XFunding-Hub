@@ -1,145 +1,179 @@
 # 04 — Delivery plan
 
-මේ අදියර පිළිවෙළට කරන්න. එක් අදියරේ tasks සහ acceptance checks අවසන් වූ පසු පමණක් ඊළඟ අදියර සම්පූර්ණ ලෙස සැලකිය හැකියි. දැනට අදියර 0–5 implement කර අදියර 6 demo verification අවසන් කර තිබෙනවා; live preparation ඉතිරියි. Payment verification එක synthetic demo adapter එකකටත් settlement evidence එක bank attestations වලටත් සීමා වේ.
+**Language:** English · [Singlish (සිංහල)](04-delivery-plan.si.md)
 
-## අදියර 0 — අලුත් foundation එක
+Work through these phases in order. A following phase can be considered complete only after the previous phase's tasks and acceptance checks are finished. Phases 0–5 are currently implemented and Phase 6 demo verification is complete; live preparation remains. Payment verification is limited to a synthetic demo adapter and settlement evidence is limited to bank attestations.
 
-**ප්‍රතිඵලය:** Existing test application එක මත depend නොවන MVP skeleton එකක්.
+## Phase 0 — New foundation
 
-- [x] [Scope defaults සහ open decisions](01-product-scope.md) review කර onboarding සඳහා අවශ්‍ය decisions record කරන්න.
-- [x] Supported stack/runtime තෝරන්න. සරල Laravel monolith එකක් යෝජිත default එකයි; existing sample version/schema/API contract preserve කිරීම requirement එකක් නොවේ.
-- [x] Implementation පටන්ගන්න විට repository `AGENTS.md` setup instructions අදාළ පරිදි සම්පූර්ණ කරන්න. Existing demo code තබනවාද ඉවත් කරනවාද තීරණය කර public sample routes disable කරන්න.
-- [x] Dev/test databases, private file storage, job runner සහ migrations සකස් කරන්න.
-- [x] Fake banks/users සමඟ seed data සහ repeatable test setup එකක් සකස් කරන්න.
+**Outcome:** An MVP skeleton that does not depend on the existing test application.
 
-**අවසන් බව පෙන්වන්නේ:** අලුත් developer කෙනෙකුට app එක boot කර tests run කළ හැකියි. Demo customer IDs/statuses මත marketplace flow එක depend නොවේ.
+- [x] Review the [scope defaults and open decisions](01-product-scope.md) and record the decisions needed for onboarding.
+- [x] Choose the supported stack/runtime. A simple Laravel monolith is the proposed default; preserving the existing sample version/schema/API contract is not a requirement.
+- [x] When starting implementation, complete the repository `AGENTS.md` setup instructions as applicable. Decide whether to keep or remove the existing demo code and disable the public sample routes.
+- [x] Set up dev/test databases, private file storage, a job runner and migrations.
+- [x] Set up seed data with fake banks/users and a repeatable test setup.
 
-## අදියර 1 — Identity සහ access control
+**Done when:** A new developer can boot the app and run the tests. The marketplace flow does not depend on demo customer IDs/statuses.
 
-**Dependency:** අදියර 0.
+## Phase 1 — Identity and access control
 
-- [x] Login/logout, invitations, password reset, session revocation සහ login rate limits.
-- [x] Bank, membership, capability සහ fixed roles; platform accounts වෙන් කිරීම.
-- [x] Platform bank verification/suspension සහ සීමිත onboarding screen.
-- [x] Bank-scoped policies, role administration සහ maker–checker approvals.
-- [x] Private download authorization සහ access/approval audit events.
+**Dependency:** Phase 0.
 
-**අවසන් බව පෙන්වන්නේ:** Bank A ට Bank B private data access නැහැ. Pending/suspended bank marketplace access, self-approval, self-promotion සහ revoked sessions වල access ප්‍රතික්ෂේප වෙනවා. UI සහ API දෙකෙන්ම checks pass වෙනවා.
+- [x] Login/logout, invitations, password reset, session revocation and login rate limits.
+- [x] Bank, membership, capability and fixed roles; separate platform accounts.
+- [x] Platform bank verification/suspension and a limited onboarding screen.
+- [x] Bank-scoped policies, role administration and maker–checker approvals.
+- [x] Private download authorization and access/approval audit events.
 
-## අදියර 2 — Borrower requests සහ financial documents
+**Done when:** Bank A has no access to Bank B private data. Marketplace access for pending/suspended banks, self-approval, self-promotion and access from revoked sessions are rejected. Checks pass through both the UI and the API.
 
-**Dependency:** අදියර 1.
+## Phase 2 — Borrower requests and financial documents
 
-- [x] Bank profile, document upload සහ authorized download; file type/size limits.
-- [x] FundingRequest draft, validation, approval, publish සහ cancellation.
-- [x] Currency/rate/tenor conventions සහ exact decimal handling.
-- [x] Published terms/documents freeze කිරීම සහ deadline expiry job එක.
-- [x] Borrower request dashboard සහ verified lenders සඳහා published-request browse/detail screens.
+**Dependency:** Phase 1.
 
-**අවසන් බව පෙන්වන්නේ:** Maker කෙනෙක් request සකස් කර වෙනත් Approver කෙනෙක් publish කරනවා. Verified lender treasury user කෙනෙකුට borrower profile/documents පෙනෙනවා; public/unauthorized user ට නොපෙනේ. Deadline ඉක්මවූ request එක lender marketplace/details/downloads වලට ලබාගත නොහැක. Bid/select actions සඳහාත් එම cutoff එක enforce කිරීම අදියර 3 acceptance එකේ කොටසක්.
+- [x] Bank profile, document upload and authorized download; file type/size limits.
+- [x] FundingRequest draft, validation, approval, publish and cancellation.
+- [x] Currency/rate/tenor conventions and exact decimal handling.
+- [x] Freezing published terms/documents and the deadline expiry job.
+- [x] Borrower request dashboard and published-request browse/detail screens for verified lenders.
 
-**Validation:** Funding feature tests 66ක් මඟින් independent approvals, forged ownership/status, bank/role isolation, exact amounts, frozen snapshots/files, stale/replayed approvals, cancellation සහ immediate/idempotent expiry verify කරනවා. Document count වැඩි කළත් funding-detail queries වැඩි නොවන regression check එකක් තිබෙනවා. Demo seeder එක Draft, PendingApproval සහ Open requests සමඟ synthetic PDF එකක් සපයනවා. Live database locking සහ Lerd route timings අදියර 6 දක්වා pending.
+**Done when:** A Maker prepares a request and a different Approver publishes it. A verified lender treasury user can see the borrower profile/documents; a public/unauthorized user cannot. A request past its deadline is not available in the lender marketplace/details/downloads. Enforcing the same cutoff for bid/select actions is part of Phase 3 acceptance.
 
-සම්පූර්ණ suite එක: tests 157 / assertions 460 pass. Pint, compiled Blade syntax සහ Markdown links checks pass. Browser එකෙන් Maker create/edit/detail, Approver publication controls සහ Lender published-only marketplace/profile screens පරීක්ෂා කළා. Local expiry scheduler එකත් run කර command execution verify කළා.
+**Validation:** 66 funding feature tests verify independent approvals, forged ownership/status, bank/role isolation, exact amounts, frozen snapshots/files, stale/replayed approvals, cancellation and immediate/idempotent expiry. A regression check confirms funding-detail queries do not grow as the document count increases. The demo seeder provides Draft, PendingApproval and Open requests with a synthetic PDF. Live database locking and Lerd route timings were pending until Phase 6.
 
-## අදියර 3 — Blind offers සහ selection
+Full suite: 157 tests / 460 assertions pass. Pint, compiled Blade syntax and Markdown link checks pass. In the browser, Maker create/edit/detail, Approver publication controls and Lender published-only marketplace/profile screens were checked. The local expiry scheduler was also run and command execution verified.
 
-**Dependency:** අදියර 2.
+## Phase 3 — Blind offers and selection
 
-- [x] Offer drafting, approval, withdrawal/replacement සහ expiry.
-- [x] Lender contact/settlement instructions සඳහා maker–checker approval සහ version history.
-- [x] Own-request bidding සහ duplicate active offers block කිරීම.
-- [x] Lender ට තම offers පමණක් පෙන්වීම; borrower ට structured anonymous comparison එකක්.
-- [x] Borrower selection proposal + වෙනත් Approver approval.
-- [x] Concurrent selection transactions සහ database constraints මඟින් එක් request එකකට එක් deal එකක්; selected terms snapshot සහ losing offers closure.
+**Dependency:** Phase 2.
 
-**අවසන් බව පෙන්වන්නේ:** Lenders දෙදෙනෙකු bid කර borrower කෙනෙක් compare/select කරනවා. Winner එකක් පමණක් ලැබෙනවා. දැනට තිබෙන API/HTML responses සහ audit views හරහා pre-fee lender identity හෙළි නොවේ. Expired/withdrawn offer select කරන්න බැහැ. Notifications/exports එකතු කළ විට ඒවා සඳහාත් anonymity checks අවශ්‍යයි.
+- [x] Offer drafting, approval, withdrawal/replacement and expiry.
+- [x] Maker–checker approval and version history for lender contact/settlement instructions.
+- [x] Blocking own-request bidding and duplicate active offers.
+- [x] Showing a lender only their own offers; a structured anonymous comparison for the borrower.
+- [x] Borrower selection proposal + approval by a different Approver.
+- [x] One deal per request through concurrent selection transactions and database constraints; selected terms snapshot and closure of losing offers.
 
-**Validation:** Offer/instruction/selection feature tests 99ක්; සම්පූර්ණ suite එක tests 256 / assertions 857 pass. Independent approvals, exact rates, anonymity, immutable encrypted instruction snapshots, withdrawal/replacement, eligibility/cutoff changes, stale sessions, approval replay සහ winner constraints verify කළා. Offers 1 සිට 9 දක්වා වැඩි කළත් comparison query count bounded බවත් demo seed idempotency එකත් tests වලින් verify වෙනවා. Live database එකේ multi-session locking සහ Lerd timings අදියර 6 තුළ verify කළ යුතුයි.
+**Done when:** Two lenders bid and a borrower compares/selects. Only one winner results. Pre-fee lender identity is not revealed through the current API/HTML responses and audit views. Expired/withdrawn offers cannot be selected. Anonymity checks are also needed for notifications/exports when they are added.
 
-අදියර 3 handover එකේ deal එක AwaitingFee ලෙස locked කර selected terms/instructions snapshot කළා. Fee quote/deadline/verification පහත අදියර 4 තුළ එකතු කර තිබෙනවා. Notification/export anonymity checks ඒ surfaces implement කළ විට නැවත කරන්න.
+**Validation:** 99 offer/instruction/selection feature tests; full suite 256 tests / 857 assertions pass. Independent approvals, exact rates, anonymity, immutable encrypted instruction snapshots, withdrawal/replacement, eligibility/cutoff changes, stale sessions, approval replay and winner constraints were verified. Tests also verify that the comparison query count stays bounded as offers increase from 1 to 9, and that the demo seed is idempotent. Multi-session locking on the live database and Lerd timings must be verified in Phase 6.
 
-Browser එකෙන් lender offer dashboard/instruction version සහ borrower comparison → Maker proposal → independent Approver approval → locked deal flow එක verify කළා. Local walkthrough එකේ එක් offer එකක් Selected සහ අනෙක් offer එක Unsuccessful; Working capital request එකේ offers දෙක තවම compare කළ හැකියි. Compiled Blade syntax, Pint, Markdown links සහ whitespace checks pass.
+At the Phase 3 handover, the deal was locked as AwaitingFee and the selected terms/instructions were snapshotted. Fee quote/deadline/verification were added in Phase 4 below. Repeat the notification/export anonymity checks when those surfaces are implemented.
 
-## අදියර 4 — Fee payment සහ controlled disclosure
+In the browser, the lender offer dashboard/instruction version and the borrower comparison → Maker proposal → independent Approver approval → locked deal flow were verified. In the local walkthrough, one offer is Selected and the other is Unsuccessful; both offers on the Working capital request can still be compared. Compiled Blade syntax, Pint, Markdown links and whitespace checks pass.
 
-**Dependency:** අදියර 3; fee formula/currency/deadline/refund decisions record කර තිබීම.
+## Phase 4 — Fee payment and controlled disclosure
 
-- [x] Demo fee formula/currency/deadline/tax/refund defaults user සමඟ තහවුරු කර scope document එකේ record කිරීම.
-- [x] Fee calculation, frozen payment quote/policy සහ fee deadline; user ට ගාස්තුව පෙර පෙන්වීම.
-- [x] Demo සඳහා authenticated test adapter එකක්; explicit local/testing enable සහ production rejection.
-- [x] Amount/currency/reference/deal validation, event/charge deduplication සහ idempotent verification handler.
-- [x] Atomic payment verification + unlock; selected lender පමණක් disclose කිරීම.
-- [x] Failed/duplicate/late/unmatched payments, bank suspension සහ RefundReview flow; reason-audited receipt reads සහ manual refund attestations.
-- [x] Treasury staff සඳහා authorized, audited, no-store contact/settlement details view.
-- [x] Pre-payment instruction changes සඳහා independent approval, encrypted history සහ identity-free notice; pending payments/refunds සහ post-unlock overwrite block කිරීම.
-- [x] Fee deadline expiry command/scheduler, idempotent demo seeder සහ safe local setup/simulation commands.
+**Dependency:** Phase 3; fee formula/currency/deadline/refund decisions recorded.
 
-**අවසන් බව පෙන්වන්නේ:** Failed/fake හෝ wrong-amount/currency payment එකකින් unlock නොවේ. Verified correct payment එකෙන් deal එක එක් වරක් unlock වේ. අනෙක් lenders hidden ලෙසම පවතිනවා. Late payment එක cancelled deal එක revive කරන්නේ නැහැ.
+- [x] Confirm the demo fee formula/currency/deadline/tax/refund defaults with the user and record them in the scope document.
+- [x] Fee calculation, frozen payment quote/policy and fee deadline; show the fee to the user up front.
+- [x] An authenticated test adapter for the demo; explicit local/testing enable and production rejection.
+- [x] Amount/currency/reference/deal validation, event/charge deduplication and an idempotent verification handler.
+- [x] Atomic payment verification + unlock; disclose only the selected lender.
+- [x] Failed/duplicate/late/unmatched payments, bank suspension and the RefundReview flow; reason-audited receipt reads and manual refund attestations.
+- [x] An authorized, audited, no-store contact/settlement details view for treasury staff.
+- [x] Independent approval, encrypted history and an identity-free notice for pre-payment instruction changes; blocking pending payments/refunds and post-unlock overwrites.
+- [x] Fee deadline expiry command/scheduler, idempotent demo seeder and safe local setup/simulation commands.
 
-**Demo decisions:** 10 bps (0.1%) of principal, loan currency එකම, smallest unit දක්වා round up, tax simulation 0, selection සිට පැය 24 offer expiry එකට සීමා කරලා, refunds සඳහා manual review. මේ defaults user විසින් demo සඳහා අනුමත කළා. Real pricing/provider/refund policy වෙනම launch decisions.
+**Done when:** A failed/fake or wrong-amount/currency payment does not unlock. A verified correct payment unlocks the deal exactly once. The other lenders stay hidden. A late payment does not revive a cancelled deal.
 
-**Validation:** නව fee/disclosure/refund/instruction-change tests 82ක්; සම්පූර්ණ suite එක **tests 338 / assertions 1,248 pass**. Raw-body signature/timestamp, malformed/forged payloads, exact amounts, stale roles/sessions, bank suspension, expired reservations, copied payment proof, event conflicts, charge reuse, unmatched/extra receipts සහ atomic rollback verify කරනවා. Refund idempotency/reference uniqueness, independent instruction approvals සහ immutable fee/financial snapshotsත් verify කරනවා. Deal list එක deals 2 සිට 8 දක්වා වැඩි කළත් query count bounded.
+**Demo decisions:** 10 bps (0.1%) of principal, same as the loan currency, rounded up to the smallest unit, tax simulation 0, 24 hours from selection capped at offer expiry, manual review for refunds. The user approved these defaults for the demo. Real pricing/provider/refund policy are separate launch decisions.
 
-Browser එකෙන් borrower Approver payment attempt → signed synthetic confirmation → Unlocked deal → selected Meridian Bank (Demo) settlement details flow එක verify කළා. Ordinary deal view එක identity-free ලෙසම පවතිනවා. No real money collected. Actual payment provider/reconciliation, live database multi-session locking සහ Lerd route timings අදියර 6 තුළ pending; native preview එකෙන් Lerd traffic samples ලැබෙන්නේ නැහැ.
+**Validation:** 82 new fee/disclosure/refund/instruction-change tests; full suite **338 tests / 1,248 assertions pass**. They verify raw-body signature/timestamp, malformed/forged payloads, exact amounts, stale roles/sessions, bank suspension, expired reservations, copied payment proof, event conflicts, charge reuse, unmatched/extra receipts and atomic rollback. They also verify refund idempotency/reference uniqueness, independent instruction approvals and immutable fee/financial snapshots. The deal list query count stays bounded as deals increase from 2 to 8.
 
-Pint, compiled Blade syntax (files 86), Markdown file links සහ whitespace checks pass. Local demo payment setup key එක output නොකර existing environment settings preserve කරන බවත් tests වලින් verify කළා. Run instructions [project README](../README.md#demo-fee-payment-and-disclosure) එකේ තිබෙනවා.
+In the browser, the borrower Approver payment attempt → signed synthetic confirmation → Unlocked deal → selected Meridian Bank (Demo) settlement details flow was verified. The ordinary deal view stays identity-free. No real money collected. Actual payment provider/reconciliation, live database multi-session locking and Lerd route timings are pending in Phase 6; the native preview does not produce Lerd traffic samples.
 
-## අදියර 5 — Settlement සහ operations
+Pint, compiled Blade syntax (86 files), Markdown file links and whitespace checks pass. Tests also verify that the local demo payment setup does not output the key and preserves existing environment settings. Run instructions are in the [project README](../README.md#demo-fee-payment-and-disclosure).
 
-**Dependency:** අදියර 4.
+## Phase 5 — Settlement and operations
 
-- [x] එක් එක් bank එකට maker–checker settlement attestation, encrypted reference/note සහ current instruction-version checks.
-- [x] Confirmation එකක් සහ දෙකක් ලැබුණු අවස්ථා UI එකේ පැහැදිලිව පෙන්වීම.
-- [x] Both confirmed → atomic deal/request Settled; dispute/ClosedUnsettled resolution සහ audit evidence.
-- [x] Settlement disputes සඳහා reason-audited operations evidence view; no unilateral successful-settlement override.
-- [x] Dispute තුළ independently approved instruction correction, encrypted history සහ old confirmations supersede කර fresh attestations අවශ්‍ය කිරීම.
-- [x] Role අනුව in-app notifications සහ paginated deal timeline; emails/exports වෙනම future surfaces.
-- [x] Existing paid demo deal එකකට idempotent optional pending-attestation seeder; user profiles/history preserve කිරීම.
+**Dependency:** Phase 4.
 
-**අවසන් බව පෙන්වන්නේ:** එක් bank එකක් confirm කිරීමෙන් Settled නොවේ. දෙපාර්ශ්වයේ approved confirmations තිබෙන විට පමණක් Settled වෙනවා. Operations ට successful transfer එකක් තනිව mark කරන්න බැහැ.
+- [x] Maker–checker settlement attestation per bank, encrypted reference/note and current instruction-version checks.
+- [x] Clearly showing in the UI when one and when two confirmations have been received.
+- [x] Both confirmed → atomic deal/request Settled; dispute/ClosedUnsettled resolution and audit evidence.
+- [x] Reason-audited operations evidence view for settlement disputes; no unilateral successful-settlement override.
+- [x] Independently approved instruction correction during a dispute, encrypted history, superseding old confirmations and requiring fresh attestations.
+- [x] Role-based in-app notifications and a paginated deal timeline; emails/exports are separate future surfaces.
+- [x] An idempotent optional pending-attestation seeder for an existing paid demo deal; preserving user profiles/history.
 
-**Validation:** නව settlement/dispute/notification tests **68ක්**; සම්පූර්ණ suite එක **tests 406 / assertions 1,525 pass**. Own-bank maker/checker roles, self/cross-bank approval, forged fields, timestamps, stale membership/instructions, pending/approved uniqueness, approval replay සහ atomic rollback verify කරනවා. One-bank pending state, normal second approval, disputed dual-confirmation resolution, ClosedUnsettled closure, encrypted private evidence සහ corrected instructions සඳහා fresh approvals දෙකත් verify කළා. Notifications recipient/current-role checks, generic timeline privacy/pagination සහ bounded query counts pass.
+**Done when:** One bank confirming does not mark it Settled. It becomes Settled only when approved confirmations from both parties exist. Operations cannot mark a successful transfer on its own.
 
-Browser එකෙන් borrower approval → dispute → lender Maker proposal → independent lender approval → reason-audited operations review/resolution → Settled flow එක verify කළා. Role-scoped notification feed සහ paginated timeline screensත් පරීක්ෂා කළා. Pint, compiled Blade syntax (files 89), Markdown links සහ whitespace checks pass.
+**Validation:** **68** new settlement/dispute/notification tests; full suite **406 tests / 1,525 assertions pass**. They verify own-bank maker/checker roles, self/cross-bank approval, forged fields, timestamps, stale membership/instructions, pending/approved uniqueness, approval replay and atomic rollback. One-bank pending state, normal second approval, disputed dual-confirmation resolution, ClosedUnsettled closure, encrypted private evidence and two fresh approvals for corrected instructions were also verified. Notification recipient/current-role checks, generic timeline privacy/pagination and bounded query counts pass.
 
-Live database multi-session locking, actual payment/refund integration සහ Lerd traffic timings අදියර 6 සඳහා තවම ඉතිරියි. Native preview එකේ Lerd `optimize_route` samples 0; automated query regressions pass වීම live runtime profiling ලෙස සලකන්නේ නැහැ.
+In the browser, the borrower approval → dispute → lender Maker proposal → independent lender approval → reason-audited operations review/resolution → Settled flow was verified. The role-scoped notification feed and paginated timeline screens were also checked. Pint, compiled Blade syntax (89 files), Markdown links and whitespace checks pass.
 
-## අදියර 6 — Demo verification සහ live preparation
+Live database multi-session locking, actual payment/refund integration and Lerd traffic timings still remain for Phase 6. The native preview has 0 Lerd `optimize_route` samples; passing automated query regressions is not treated as live runtime profiling.
 
-**Dependency:** අදියර 1–5; live-only tasks සඳහා අදාළ business decisions.
+## Phase 6 — Demo verification and live preparation
 
-- [x] PostgreSQL තෝරාගැනීම record කරන්න; user විසින් payment provider තීරණය පසුවට තැබුවා.
-- [x] Borrower bank එකක්, lender banks දෙකක් සහ වෙන වෙනම Maker/Approver users සමඟ request → fee → settlement සම්පූර්ණ HTTP scenario එක run කරන්න; lenders දෙදෙනාම winner විය හැකි cases දෙක verify කරන්න.
-- [x] Access-control acceptance checks, expiry, duplicate payment සහ actual separate-session PostgreSQL selection/payment/settlement race checks pass කරන්න.
-- [x] Bank roles අනුව lists, private downloads, disclosure, in-app notifications සහ timeline නැවත review කරන්න.
-- [x] PostgreSQL notification JSON filtering දෝෂය data-preserving migration එකකින් නිවැරදි කර existing payloads/IDs රැකෙන බව verify කරන්න.
-- [x] Existing local SQLite history PostgreSQL වෙත transaction එකකින් copy කර encrypted proof, user-edited profiles, private-file checksums සහ ID sequences verify කරන්න.
-- [x] Lerd PHP 8.4 / PostgreSQL runtime එකේ affected routes hit කර query capture/optimize_route මඟින් N+1/slow-route regressions review කරන්න.
-- [x] Local PostgreSQL SQL export එක වෙනම recovery database එකකට restore කර tables 29ක counts/content hashes සසඳන්න; temporary recovery databases ඉවත් කරන්න.
-- [x] Queue සහ expiry scheduler Lerd workers ලෙස run කර local Mailpit SMTP connection සකස් කරන්න.
-- [ ] Email notifications/exports පසුව එකතු කළොත් ඒ surfaces වල anonymity/access review නැවත කරන්න; ඒවා දැනට නැහැ.
-- [ ] Real payment provider/verified transfer process සම්බන්ධ කර sandbox reconciliation සහ actual refund checks අවසන් කරන්න. User තීරණය පසුවට තැබුවා; demo adapter production වල disabled.
-- [ ] Real-bank staff MFA implement/verify කරන්න.
-- [ ] Production off-host encrypted backups, separate APP_KEY recovery, monitoring/alerting සහ document retention policy සකස් කරන්න.
-- [ ] Bank due-diligence process, platform terms, live fee/refund policy සහ jurisdiction-specific regulatory review අවසන් කරන්න.
+**Dependency:** Phases 1–5; the relevant business decisions for live-only tasks.
 
-**Validation — 2026-10-16:** PostgreSQL 16.14 suite එක **tests 423 / assertions 1,847 pass**. SQLite suite එක **tests 411 / assertions 1,783 pass**, PostgreSQL-only tests 12ක් intentionally skip වෙනවා. නව integrated journey tests දෙක API actions හරහා draft/PDF/publication, lenders දෙදෙනාගේ independently approved instructions/offers, blind comparison, selection, wrong-amount refund review, exact signed payment/replay, restricted disclosure සහ both-bank settlement verify කරනවා.
+- [x] Record the choice of PostgreSQL; the user deferred the payment provider decision.
+- [x] Run the full request → fee → settlement HTTP scenario with one borrower bank, two lender banks and separate Maker/Approver users; verify both cases where either lender can be the winner.
+- [x] Pass access-control acceptance checks, expiry, duplicate payment and actual separate-session PostgreSQL selection/payment/settlement race checks.
+- [x] Re-review lists, private downloads, disclosure, in-app notifications and timeline by bank role.
+- [x] Fix the PostgreSQL notification JSON filtering bug with a data-preserving migration and verify existing payloads/IDs are preserved.
+- [x] Copy the existing local SQLite history to PostgreSQL in one transaction and verify encrypted proof, user-edited profiles, private-file checksums and ID sequences.
+- [x] Hit affected routes on the Lerd PHP 8.4 / PostgreSQL runtime and review N+1/slow-route regressions with query capture/optimize_route.
+- [x] Restore the local PostgreSQL SQL export into a separate recovery database, compare counts/content hashes for 29 tables, and remove the temporary recovery databases.
+- [x] Run the queue and expiry scheduler as Lerd workers and set up the local Mailpit SMTP connection.
+- [ ] If email notifications/exports are added later, repeat the anonymity/access review for those surfaces; they do not exist yet.
+- [ ] Connect a real payment provider/verified transfer process and complete sandbox reconciliation and actual refund checks. The user deferred this decision; the demo adapter is disabled in production.
+- [ ] Implement/verify real-bank staff MFA.
+- [ ] Set up production off-host encrypted backups, separate APP_KEY recovery, monitoring/alerting and a document retention policy.
+- [ ] Complete the bank due-diligence process, platform terms, live fee/refund policy and jurisdiction-specific regulatory review.
 
-PostgreSQL concurrency tests 6ක් actual backend sessions දෙක barrier එකකින් එකවර පටන්ගෙන competing offer selections, approval replay, same-event/same-charge/additional-charge notifications සහ simultaneous bank approvals verify කරනවා. එක් pending choice/winner, එක් canonical allocation සහ එක් settlement event එකක් පමණයි. Test configuration fixed xfunding_hub_testing database එකකට සීමා කර තිබෙනවා; parallel suite execution නොකරන්න.
+**Validation — 2026-10-16:** PostgreSQL 16.14 suite **423 tests / 1,847 assertions pass**. SQLite suite **411 tests / 1,783 assertions pass**, with 12 PostgreSQL-only tests intentionally skipped. Two new integrated journey tests verify, through API actions, draft/PDF/publication, independently approved instructions/offers from both lenders, blind comparison, selection, wrong-amount refund review, exact signed payment/replay, restricted disclosure and both-bank settlement.
 
-Local app එක http://xfunding-hub.test හි PostgreSQL වෙත migrate කර තිබෙනවා. Banks 5, users 17, notifications 39 සහ සියලු deal/fee/settlement/audit history copy කළා; source SQLite checksum එක unchanged. Sessions/reset tokens/cache migrate නොකළ නිසා නැවත sign in කළ යුතුයි. APP_KEY සහ private PDFs රැකුණා; missing/changed files, wrong key සහ non-empty targets මත importer rollback වෙන බව tests වලින් verify කළා.
+Six PostgreSQL concurrency tests start two actual backend sessions simultaneously behind a barrier and verify competing offer selections, approval replay, same-event/same-charge/additional-charge notifications and simultaneous bank approvals. There is only one pending choice/winner, one canonical allocation and one settlement event. The test configuration is restricted to the fixed xfunding_hub_testing database; do not run the suite in parallel.
 
-Browser එකෙන් migrated Settled deal, role-scoped notifications සහ selected Meridian Bank encrypted account/contact details verify කළා. Lerd captured requests 11ක median 80 ms; slow routes නැහැ. Generic fingerprints වෙනස් tables වල fixed queries එකට group කරන findings raw SQL මඟින් review කළා; existing PostgreSQL query-count regression checks අනුව record count වැඩි වූ විට query count වැඩි වෙන N+1 නැහැ. මේ local samples load test එකක් නොවේ.
+The local app at http://xfunding-hub.test has been migrated to PostgreSQL. 5 banks, 17 users, 39 notifications and all deal/fee/settlement/audit history were copied; the source SQLite checksum is unchanged. Sessions/reset tokens/cache were not migrated, so users must sign in again. APP_KEY and private PDFs were preserved; tests verify that the importer rolls back on missing/changed files, a wrong key and non-empty targets.
 
-Backup rehearsal එකේ persistent tables 29ක counts සහ canonical row-content hashes match වුණා. Recovery databases ඉවත් කළා; private temporary export එක /tmp/xfunding-runtime/recovery-check/ තුළ තිබෙනවා. මේක durable production backup එකක් හෝ off-host recovery drill එකක් නොවේ. Real recovery සඳහා database, private documents සහ original key වෙන වෙනම secure කර restore target එකක verify කළ යුතුයි.
+In the browser, the migrated Settled deal, role-scoped notifications and the selected Meridian Bank encrypted account/contact details were verified. Lerd captured 11 requests with an 80 ms median; no slow routes. Findings where generic fingerprints grouped fixed queries on different tables together were reviewed with raw SQL; according to the existing PostgreSQL query-count regression checks, there is no N+1 where the query count grows with the record count. These local samples are not a load test.
 
-**Demo-ready:** සම්පූර්ණ fake-data/test-payment flow සහ rejection scenarios verify කර තිබෙනවා.
+In the backup rehearsal, counts and canonical row-content hashes for 29 persistent tables matched. The recovery databases were removed; the private temporary export is in /tmp/xfunding-runtime/recovery-check/. This is not a durable production backup or an off-host recovery drill. For real recovery, the database, private documents and original key must be secured separately and verified on a restore target.
 
-Pint, compiled Blade syntax (files 95), Markdown links සහ whitespace checks pass. Lerd queue/scheduler workers healthy; query capture නැවත disabled කර තිබෙනවා. Verification browser session එක අවසන් කළා; නව local URL එකෙන් නැවත sign in කළ හැකියි.
+**Demo-ready:** The full fake-data/test-payment flow and rejection scenarios have been verified.
 
-**Live-ready:** තවම නැහැ. Payment integration, MFA සහ ඉහත production/business checks ඉතිරියි. Phase 6 සම්පූර්ණ ලෙස mark කර නැහැ.
+Pint, compiled Blade syntax (95 files), Markdown links and whitespace checks pass. Lerd queue/scheduler workers are healthy; query capture has been disabled again. The verification browser session was ended; you can sign in again at the new local URL.
 
-## එක් එක් අදියරේ handover එක
+**Live-ready:** Not yet. Payment integration, MFA and the production/business checks above remain. Phase 6 is not marked complete.
 
-අවසන් කළ tasks tick කර, relevant tests/checks සහ තවම ඉතිරි decisions කෙටියෙන් record කරන්න. Requirement වෙනස් වුණොත් scope/access/workflow document එක update කර පසුව checklist එක වෙනස් කරන්න. අමතර ceremony හෝ වෙනම status documents අවශ්‍ය නැහැ.
+## Post-review corrections — 2026-11-03
+
+An independent review of Phases 0–6 found the issues below. All of them are corrected.
+
+- [x] Borrower receiving instructions: maker–checker versions chosen with the selection, encrypted on the deal and disclosed to the selected lender's treasury after fee verification.
+- [x] Dispute closure: `ClosedUnsettled` is available whenever `Settled` is not. It supersedes pending attestations and instruction reviews and records `cancelled_at`.
+- [x] Invitation tokens are encrypted in queued jobs.
+- [x] Saving an unchanged bank profile keeps its verification.
+- [x] Recorded payment proof no longer depends on the demo flag. Demo proof is still never honoured outside local/testing.
+- [x] Confirmation and dispute creation responses return their stored status.
+- [x] A bank user's action is recorded in that user's institution history, and bank admins/auditors have a paginated audit view.
+- [x] Platform account administration through the operations screen and `platform:create-admin`.
+- [x] A 60-minute minimum fee window at selection.
+- [x] Malformed route identifiers return 404 on PostgreSQL, and an array login email returns a validation error.
+- [x] The selected lender no longer sees the comparison label. Selection, fee verification and reservation closure notify both banks. The funding-request link is hidden when the request cannot be read.
+- [x] Revoked staff can be reinstated with independent approval, and unused instruction versions can be retired.
+- [x] Foreign-key lookup indexes, browser hardening headers and the `symfony/mime` security update.
+
+**Validation — 2026-11-03:** PostgreSQL suite **492 tests / 2,188 assertions pass**. SQLite suite **480 tests / 2,123 assertions pass**, with 12 PostgreSQL-only tests skipped. A temporary sweep called every parameterised route as an unrelated bank user holding all four roles; all 82 requests were denied. A second sweep found no lender identity in ordinary borrower views before or after the fee. These changes were exercised through HTTP feature tests, not a browser walkthrough.
+
+**Still open:** long-line and status-string cleanup, and removal of the retired loan sample code, which needs approval because it deletes tests.
+
+## Interface and flow — 2026-11-03
+
+- [x] Role-aware Home page with a work queue, and its count in the navigation on every page.
+- [x] Progress tracker and one next step with its action on every request, offer and deal.
+- [x] Conflicts on form submissions return to the page with the reason; friendly error pages replace raw ones.
+- [x] Single-table offer comparison with one receiving-account choice, and one-step offer submission.
+- [x] Grouped money, readable dates and short references; a rewritten design system with mobile navigation and no new dependency.
+
+**Validation — 2026-11-03:** PostgreSQL suite **544 tests / 2,870 assertions pass**. SQLite suite **532 tests / 2,805 assertions pass**, with 12 PostgreSQL-only tests skipped. `RenderedFormsJourneyTest` submits only what the rendered forms contain and follows Home from draft to settled; deliberately broken fields and links made it fail. The authorization sweep (82 of 82 requests denied) and the lender-identity sweep were repeated with Home included. Screens were checked in headless-Chrome screenshots of rendered pages at desktop and mobile widths. A live click-through in a running browser has not been done.
+
+## Handover for each phase
+
+Tick the completed tasks and briefly record the relevant tests/checks and the decisions still remaining. If a requirement changes, update the scope/access/workflow document and then change the checklist. No extra ceremony or separate status documents are needed.

@@ -1,105 +1,111 @@
 # 02 — Access control
 
-## මූලික නීතිය
+**Language:** English · [Singlish (සිංහල)](02-access-control.si.md)
 
-හැම action එකකදීම **authenticated user + active membership + bank verification/capability + permission + record relationship + workflow state** පරීක්ෂා කරන්න. මේ පරීක්ෂණ අදාළ නැති action වලදී පමණක් ඒ කොටස ඉවත් කරන්න; උදාහරණයක් ලෙස pending bank එකකට onboarding profile සම්පූර්ණ කළ හැකියි.
+## Core rule
 
-Default එක deny විය යුතුයි. Bank ID එක request body එකෙන් විශ්වාස කර නොගෙන authenticated membership එකෙන් ගන්න. URL/record ID එක වෙනස් කිරීමෙන් වෙනත් බැංකුවක private data ලබාගත නොහැකි විය යුතුයි.
+On every action, check **authenticated user + active membership + bank verification/capability + permission + record relationship + workflow state**. Drop a part only for actions where that check does not apply; for example, a pending bank can complete its onboarding profile.
+
+The default must be deny. Do not trust a bank ID from the request body; take it from the authenticated membership. Changing a URL/record ID must not give access to another bank's private data.
 
 ## Roles
 
-| Role | කළ හැකි දේ | සීමාව |
+| Role | Can do | Limit |
 |---|---|---|
-| Platform Admin | Bank verification/suspension, platform account administration, audited operational reviews | Bank එකක් වෙනුවෙන් bid/select/settle කළ නොහැක; fee gate bypass කළ නොහැක |
-| Bank Admin | තම බැංකුවේ profile, invitations, membership සහ role administration | මේ role එකෙන් පමණක් treasury approvals හෝ payment unlock කළ නොහැක |
-| Treasury Maker | තම bank capability අනුව requests/offers draft කිරීම; selection/confirmation යෝජනා කිරීම | තමා සකස් කළ action එක approve කළ නොහැක |
-| Treasury Approver | තම බැංකුවේ වෙනත් user කෙනෙක් යෝජනා කළ treasury actions approve/reject කිරීම; fee payment ආරම්භ කිරීම | වෙනත් බැංකුවක action එකක් හෝ තම action එකක් approve කළ නොහැක |
-| Bank Auditor | තම බැංකුවට අවසර ඇති records සහ audit history කියවීම | Write access නැහැ; settlement account/contact fields බලන්න අවසර නැහැ |
+| Platform Admin | Bank verification/suspension, platform account administration, audited operational reviews | Cannot bid/select/settle on behalf of a bank; cannot bypass the fee gate |
+| Bank Admin | Own bank's profile, invitations, membership and role administration | This role alone cannot give treasury approvals or unlock payment |
+| Treasury Maker | Draft requests/offers according to the bank's capability; propose selection/confirmation | Cannot approve an action they prepared |
+| Treasury Approver | Approve/reject treasury actions proposed by another user at the same bank; initiate fee payment | Cannot approve another bank's action or their own action |
+| Bank Auditor | Read records and audit history the bank is permitted to see | No write access; not allowed to see settlement account/contact fields |
 
-Bank Admin role එක treasury permission එකක් නොවේ. වෙනත් treasury role එකක් ද ලබාදී ඇත්නම් පමණක් එම permissions ලැබේ. User කෙනෙකු roles කිහිපයක් දැරුවත් maker–checker පරීක්ෂාව user ID අනුව කළ යුතුයි.
+The Bank Admin role is not a treasury permission. Those permissions apply only if another treasury role is also granted. Even when a user holds several roles, the maker–checker check must be done by user ID.
 
-Approver හෝ Bank Admin ලෙස privilege වැඩි කරන role grant එකක් තමාටම approve කළ නොහැක. වෙනත් authorized Bank Admin කෙනෙක් හෝ Platform Admin කෙනෙක් එය අනුමත කර audit කරන්න. මුල් Bank Admin account එක platform onboarding හරහා සකස් කරන්න.
+A role grant that raises privilege to Approver or Bank Admin cannot be self-approved. Another authorized Bank Admin or a Platform Admin must approve and audit it. Set up the first Bank Admin account through platform onboarding.
 
-පළමු implementation එකේ invitations සහ සියලු role changes එකම independent approval flow එකෙන් යනවා. Request එක යෝජනා කළ user ටත්, එම role change එකෙන් ප්‍රතිලාභ ලබන user ටත් එය approve කරන්න බැහැ. Membership/role වෙනස් කළ විට පැරණි sessions නැවත sign in කළ යුතුයි. අවසාන active Bank Admin ඉවත් කළ නොහැක.
+In the first implementation, invitations and all role changes go through the same independent approval flow. Neither the user who proposed the request nor the user who benefits from the role change can approve it. When membership/roles change, old sessions must sign in again. The last active Bank Admin cannot be removed.
 
 ## Data visibility
 
-| තොරතුරු | කාට පෙනේද? |
+| Information | Who can see it? |
 |---|---|
-| Bank onboarding සහ unpublished drafts | එම බැංකුවේ අවසර ඇති staff; verification සඳහා අවශ්‍ය සීමිත platform staff |
-| Published request, borrower identity සහ attached financial documents | අදාළ verified lender banks සහ owning borrower bank |
-| Lender offer එකේ terms | Owning lender bank staff; request එකේ borrower ට anonymous projection එකක් |
-| Lender instruction versions | එම verified lender bank එකේ Maker/Approver users පමණයි; Admin-only/Auditor-only/platform users ට නැහැ |
-| වෙනත් lenders ගේ offers | Lenders ට නොපෙනේ |
-| Selected lender identity | Fee verify වන තුරු borrower ට නොපෙනේ; පසුව එම deal එකේ authorized treasury Maker/Approver users ට පමණයි |
-| Contact සහ settlement instructions | Verified fee සහ unlocked deal එකකට පමණක්, අදාළ බැංකු දෙකේ treasury staff ට |
-| Non-selected lender identities | Borrower ට කිසිම අවස්ථාවක හෙළි නොකරන්න |
+| Bank onboarding and unpublished drafts | Authorized staff of that bank; limited platform staff needed for verification |
+| Published request, borrower identity and attached financial documents | Relevant verified lender banks and the owning borrower bank |
+| Lender offer terms | Owning lender bank staff; an anonymous projection for the request's borrower |
+| Settlement instruction versions | Only Maker/Approver users of that verified bank, which needs the Borrower or Lender capability; not Admin-only/Auditor-only/platform users |
+| Other lenders' offers | Not visible to lenders |
+| Selected lender identity | Hidden from the borrower until the fee is verified; afterwards only for that deal's authorized treasury Maker/Approver users |
+| Contact and settlement instructions | The lender's version and the borrower's receiving version: only for a verified fee and an unlocked deal, to treasury staff of the two banks involved |
+| Non-selected lender identities | Never disclose to the borrower |
 
-Bank Admin කෙනෙකුට documents publish කිරීම හෝ lender identity unlock කිරීම සෘජුව කළ නොහැක. Bank Auditor සහ Bank Admin-only users සඳහා settlement/contact fields exclude කරන්න.
+A Bank Admin cannot directly publish documents or unlock a lender identity. Exclude settlement/contact fields for Bank Auditor and Bank Admin-only users.
 
-අදියර 2 implementation එකේ තම verified bank එකේ funding records staff roles හතරටම read කරන්න පුළුවන්. Create/edit/upload/submit/cancellation proposal සඳහා Borrower capability + Maker role අවශ්‍යයි. Publication/cancellation review සඳහා Borrower capability + Approver role අවශ්‍යයි. Published requests සහ financial documents වෙනත් bank එකකින් browse කළ හැක්කේ verified Lender capability ඇති Maker/Approver users ට පමණයි; Admin-only සහ Auditor-only accounts ට marketplace access නැහැ. Borrower eligibility නැති වූ වහාම lender reads/downloads අවහිර වෙනවා.
+In the Phase 2 implementation, all four staff roles can read their own verified bank's funding records. Create/edit/upload/submit/cancellation proposal requires the Borrower capability + Maker role. Publication/cancellation review requires the Borrower capability + Approver role. Only Maker/Approver users with the verified Lender capability can browse published requests and financial documents from another bank; Admin-only and Auditor-only accounts have no marketplace access. Lender reads/downloads are blocked as soon as borrower eligibility is lost.
 
-Funding documents platform staff ට default access නැහැ. Onboarding PDFs සහ request financial PDFs වෙනම ownership/policies යටතේ තබනවා. Document download audit event එකේ lender actor backend එකේ record කළත් owning borrower view එකේ එම lender identity පෙන්වන්නේ නැහැ.
+Platform staff have no default access to funding documents. Onboarding PDFs and request financial PDFs are kept under separate ownership/policies. A lender's document download is recorded in the lender's own audit history, so the owning borrower's history does not show that activity.
 
-Platform-wide admin role එකෙන් sensitive documents/accounts සෑම විටම කියවන්න ඉඩ නොදෙන්න. Verification සඳහා අදාළ onboarding records පමණක් පෙන්වන්න. Payment/dispute review සඳහා අවශ්‍ය privileged read එක reason එකක් සහ audit event එකක් සමඟ වෙනම authorize කරන්න; එයින් borrower access unlock නොවිය යුතුයි.
+Do not let a platform-wide admin role always read sensitive documents/accounts. Show only the onboarding records relevant to verification. Authorize the privileged read needed for payment/dispute review separately, with a reason and an audit event; it must not unlock borrower access.
 
-අදියර 3 implementation එකේ offer draft/edit/submit/withdraw සඳහා Lender Maker role එකත්, independent offer review සඳහා Lender Approver role එකත් අවශ්‍යයි. Offer contributors ට publication approve කරන්න බැහැ. Borrower staff ට lender internal offer routes access නැහැ; comparison එකට random request-local token, label, rate, structured conditions සහ validity පමණක් ලැබෙනවා.
+In the Phase 3 implementation, offer draft/edit/submit/withdraw requires the Lender Maker role, and independent offer review requires the Lender Approver role. Offer contributors cannot approve publication. Borrower staff have no access to lender internal offer routes; the comparison only receives a random request-local token, label, rate, structured conditions and validity.
 
-Selection proposal එක Borrower Maker කෙනෙක් යෝජනා කර වෙනත් Borrower Approver කෙනෙක් approve/reject කරනවා. Admin/Auditor users ට own-bank comparison/deal terms read කළ හැකි නමුත් treasury actions කළ නොහැක. Selected lender treasury staff ට borrower financial documents දිගටම කියවිය හැකියි; losing lenders ට request/document access close වෙනවා. Pre-fee deal view එකේ කිසිම borrower role එකකට lender identity/account/contact fields නැහැ. Privileged platform role එකකටත් treasury/fee gate bypass නැහැ.
+A Borrower Maker proposes the selection and a different Borrower Approver approves/rejects it. Admin/Auditor users can read own-bank comparison/deal terms but cannot perform treasury actions. Selected lender treasury staff can keep reading the borrower's financial documents; losing lenders lose request/document access. No borrower role sees lender identity/account/contact fields in the pre-fee deal view. Even a privileged platform role cannot bypass the treasury/fee gate.
 
-අදියර 4 implementation එකේ payment ආරම්භ කළ හැක්කේ owning verified Borrower Approver කෙනෙකුට පමණයි. Amount, currency, reference සහ paid/unlocked status client එකෙන් ලබාදිය නොහැක. Payment adapter එක authenticated provider notification එකේ amount/currency/reference/deal සහ current eligibility නැවත පරීක්ෂා කර unlock කරනවා; browser success හෝ operations action එකක් payment proof නොවේ.
+In the Phase 4 implementation, only an owning verified Borrower Approver can initiate payment. Amount, currency, reference and paid/unlocked status cannot be supplied by the client. The payment adapter rechecks the amount/currency/reference/deal and current eligibility in the authenticated provider notification before unlocking; a browser success or an operations action is not payment proof.
 
-Unlock වුණත් සාමාන්‍ය deal API/HTML responses වල lender identity/account/contact fields ඇතුළත් නැහැ. වෙනම disclosure endpoint එක deal participation, Maker/Approver role, banks දෙකේ verification/capabilities, approved instruction snapshot සහ එම deal එකටම අදාළ verified receipt පරීක්ෂා කරනවා. සෑම disclosure read එකක්ම audit කරන අතර private no-store response එකක් ලබාදෙනවා. Admin-only, Auditor-only සහ platform users ට bypass නැහැ; suspension/role revocation පසු reads වහාම නවත්වනවා.
+Even after unlock, ordinary deal API/HTML responses do not include lender identity/account/contact fields. A separate disclosure endpoint checks deal participation, Maker/Approver role, verification/capabilities of both banks, the approved instruction snapshot and a verified receipt for that specific deal. Every disclosure read is audited and returns a private no-store response. Admin-only, Auditor-only and platform users have no bypass; reads stop immediately after suspension/role revocation.
 
-Platform Operations ට payment exception list එක සහ reason එකක් සමඟ audited receipt details කියවිය හැකියි. Refund reference සහ review reason record කිරීම transfer execution එකක් නොවේ; එම route එකෙන් paid/unlocked කළ නොහැක. Lender Maker විසින් pre-payment instruction change යෝජනා කර වෙනත් own-bank Approver කෙනෙක් review කරනවා; borrower ට ලැබෙන්නේ identity-free notice එකක් පමණයි.
+Platform Operations can read the payment exception list and, with a reason, audited receipt details. Recording a refund reference and review reason is not a transfer execution; that route cannot mark anything paid/unlocked. A Maker at either bank proposes a pre-payment change to its own instructions and a different own-bank Approver reviews it; the other bank only receives an identity-free notice.
 
-අදියර 5 implementation එකේ verified participating bank Maker settlement attestation එකක් යෝජනා කර වෙනත් same-bank Approver කෙනෙක් review කරනවා. Pending/approved record එකකට වෙනත් confirmation එකක් යෝජනා කළ නොහැක. Approval වෙලාවේ payment proof, banks දෙක, approved instruction version සහ proposing makerගේ active membership/role නැවත පරීක්ෂා කරනවා. Reference, note සහ review reason encrypted ලෙස තබා owning bank treasury users ට පමණක් ලබාදෙනවා; අනෙක් පාර්ශ්වයට සහ Admin/Auditor-only users ට status පමණයි.
+In the Phase 5 implementation, a verified participating bank's Maker proposes a settlement attestation and a different same-bank Approver reviews it. Another confirmation cannot be proposed for a pending/approved record. At approval time, the payment proof, both banks, the approved instruction version and the proposing maker's active membership/role are rechecked. The reference, note and review reason are stored encrypted and provided only to the owning bank's treasury users; the other party and Admin/Auditor-only users see status only.
 
-Owning bank Approver ට unlocked deal එකක් Disputed කළ හැකියි; අනෙක් bank එක suspended වුණත් තමන් verified නම් issue report කළ හැකියි. Platform Operations ට reason-audited dispute evidence review සහ resolution පමණක් කළ හැකියි. Approved confirmations දෙක නොමැතිව Settled කරන්න හෝ bank confirmation එකක් සකස් කරන්න බැහැ. Dispute තුළ independently approved instruction correction එකක් කළොත් කලින් confirmations supersede කර දෙපාර්ශ්වයටම fresh approvals අවශ්‍ය කරනවා.
+An owning bank Approver can mark an unlocked deal as Disputed; they can report an issue if their own bank is verified, even if the other bank is suspended. Platform Operations can only do reason-audited dispute evidence review and resolution. It cannot mark a deal Settled without two approved confirmations, or create a bank confirmation. If an independently approved instruction correction is made during a dispute, earlier confirmations are superseded and fresh approvals are required from both parties.
 
-In-app notifications recipient + current bank + current role + deal participation අනුව filter කරනවා. Read acknowledgement එක වෙනත් user කෙනෙකුගේ notification ID එකෙන් කළ නොහැක. Notifications සහ paginated deal timeline fixed status text පමණක් සපයනවා; accounts, contacts, actor identities, references හෝ private narratives ඇතුළත් නැහැ.
+In-app notifications are filtered by recipient + current bank + current role + deal participation. A read acknowledgement cannot be made using another user's notification ID. Notifications and the paginated deal timeline only provide fixed status text; they do not include accounts, contacts, actor identities, references or private narratives.
 
-## Bank සහ workflow සීමාවන්
+## Bank and workflow limits
 
-- Unverified හෝ suspended bank එකකට marketplace browse, publish, bid, select, pay හෝ confirm කරන්න බැහැ. Unverified bank එකකට තම onboarding process එක පමණක් භාවිතා කළ හැකියි.
-- දෙපාර්ශ්වයේ eligibility එක selection සහ unlock වෙලාවෙත් නැවත පරීක්ෂා කරන්න. Selected bank එක suspended නම් payment/unlock exception එක review කරන්න.
-- Borrower/Lender capabilities දෙකම ඇති බැංකුවකටත් තම request එකට bid කරන්න බැහැ.
-- Approval එකකට යොමු කළ terms වෙනස් කළොත් කලින් approval එක අවලංගු කර නැවත approve කරන්න.
-- Publication approval එක proposer ට හෝ එම request එක create/edit/document upload/remove කළ වෙනත් contributor කෙනෙකුට approve කළ නොහැක. Roles කිහිපයක් තිබුණත් මේ සීමාව user ID අනුව enforce වෙනවා.
-- Pending publication එකක terms/files වෙනස් කළොත් approval එක supersede කර Draft කරන්න. Proposal එකේ borrower identity snapshot එකත් approval වෙලාවේ නැවත පරීක්ෂා කරන්න.
-- Published request එකේ borrower profile, financial terms සහ documents freeze කරන්න. Cancellation සඳහා වෙනත් approver කෙනෙක් සහ reason එකක් අවශ්‍යයි.
-- Membership revoke කිරීමෙන් පසු sessions, downloads සහ අනෙක් reads/writes වල access නැවත පරීක්ෂා විය යුතුයි.
+- An unverified or suspended bank cannot browse the marketplace, publish, bid, select, pay or confirm. An unverified bank can only use its own onboarding process.
+- Recheck both parties' eligibility at selection and unlock time as well. If the selected bank is suspended, review the payment/unlock exception.
+- Even a bank with both Borrower/Lender capabilities cannot bid on its own request.
+- If terms sent for approval change, invalidate the earlier approval and approve again.
+- Publication approval cannot be given by the proposer or by any other contributor who created/edited the request or uploaded/removed documents. This limit is enforced by user ID, even if the user has several roles.
+- If a pending publication's terms/files change, supersede the approval and return it to Draft. Also recheck the proposal's borrower identity snapshot at approval time.
+- Freeze the published request's borrower profile, financial terms and documents. Cancellation requires a different approver and a reason.
+- After membership is revoked, access must be rechecked for sessions, downloads and all other reads/writes.
 
 ## Enforcement
 
-- Laravel භාවිතා කරනවා නම් Policies + bank-scoped queries + explicit response resources යොදාගන්න. Frontend visibility එක authorization එකක් ලෙස භාවිතා නොකරන්න.
-- Financial documents private storage එකක තබන්න. Authorization පරීක්ෂා කරන download route එකකින් serve කරන්න; public permanent URLs නොදෙන්න.
-- Borrower-facing payloads වල lender IDs, bank names, emails, actor names හෝ internal relationships ඇතුළත් නොකරන්න. Anonymous label එක request එක තුළට පමණක් සීමා කරන්න.
-- Notifications, exports, search, cached responses සහ background jobs වලත් එම access rules යොදන්න. Audit history එකෙන් ද identity leak නොවිය යුතුයි.
-- Fee verification යනු verified payment handler එකේ action එකක්. සාමාන්‍ය user/admin status update එකක් හරහා `paid` හෝ `unlocked` කළ නොහැක.
-- Login rate limits සහ session revocation foundation එකට ඇතුළත් කරන්න. Real-bank launch එකට staff MFA සකස් කරන්න.
+- If using Laravel, use Policies + bank-scoped queries + explicit response resources. Do not use frontend visibility as authorization.
+- Keep financial documents in private storage. Serve them through a download route that checks authorization; do not give out public permanent URLs.
+- Do not include lender IDs, bank names, emails, actor names or internal relationships in borrower-facing payloads. Limit the anonymous label to within the request.
+- Apply the same access rules to notifications, exports, search, cached responses and background jobs. Identity must not leak through audit history either.
+- Fee verification is an action of the verified payment handler. Nothing can be marked `paid` or `unlocked` through an ordinary user/admin status update.
+- Include login rate limits and session revocation in the foundation. Set up staff MFA for a real-bank launch.
 
 ## Acceptance checks
 
-- [x] Anonymous user කෙනෙකුට marketplace/private documents access නැහැ.
-- [x] Bank A user කෙනෙකුට Bank B funding draft එක ID එකෙන් සොයාගත නොහැක.
-- [x] Verified lender treasury user කෙනෙකුට open request එකේ borrower profile/documents පමණක් පෙනේ; private approvals/storage paths නොපෙනේ.
-- [x] Publication self-approval, stale/replayed approval සහ published terms/document changes ප්‍රතික්ෂේප වේ.
-- [x] Deadline ඉක්මවූ requests lender lists/details/downloads වලින් වහාම ඉවත් වේ; expiry job එක නැවත run කළත් duplicate events නොහැදේ.
-- [x] Bank A user කෙනෙකුට Bank B private deal එක ID එකෙන් සොයාගත නොහැක.
-- [x] Lender කෙනෙකුට competitor bids නොපෙනේ.
-- [x] Borrower comparison/deal API, HTML සහ audit views වලින් pre-fee lender identity/instructions හෙළි නොවේ.
-- [x] Cross-request offer token, self-selection approval, stale/replayed decision, withdrawn/expired/ineligible offer selection ප්‍රතික්ෂේප වේ.
-- [x] Database constraints සහ request lock එකෙන් active lender offer, pending selection සහ winning deal uniqueness enforce වෙනවා.
-- [x] Separate PostgreSQL backend sessions වල competing selection proposals/approvals, duplicate/extra payments සහ simultaneous settlement approvals එක winner/allocation/event එකකට සීමා වේ.
-- [x] In-app notifications සහ deal timeline වල identity/reference/narrative leakage නැහැ; current role සහ recipient isolation enforce වේ.
-- [ ] Email notifications සහ exports implement කළ විට anonymity rules නැවත verify කරන්න.
-- [x] Fee verify කළ පසු selected lender පමණක් අදාළ treasury users ට වෙනම audited disclosure view එකෙන් පෙනේ.
-- [x] Unsigned/fake, wrong amount/currency/deal, replay-conflicting සහ late payments මඟින් unlock කළ නොහැක; සාමාන්‍ය user/admin paid override නැහැ.
-- [x] Admin/Auditor/platform accounts, copied payment proof සහ revoked/suspended membership මඟින් disclosure bypass කළ නොහැක.
-- [x] Fee exception details සඳහා platform reason/audit අවශ්‍යයි; refund attestations සහ instruction changes bank/role/state සීමා enforce කරනවා.
-- [x] Confirmation self-approval, cross-bank review, duplicate/replayed approvals, stale instruction/member සහ forged fields reject වේ.
-- [x] One-bank approval Settled නොකරයි; operations ට දෙපාර්ශ්වයේ evidence නොමැතිව successful settlement fabricate කළ නොහැක.
-- [x] Disputed instruction corrections old evidence preserve කර previous confirmations supersede කරනවා; fresh approvals දෙක අවශ්‍යයි.
-- [x] Self-approval, self-promotion, arbitrary status update සහ revoked membership access ප්‍රතික්ෂේප වේ.
-- [x] Suspension හෝ role වෙනසක් cached response/download මඟින් bypass කළ නොහැක.
+- [x] An anonymous user has no access to the marketplace/private documents.
+- [x] A Bank A user cannot find a Bank B funding draft by ID.
+- [x] A verified lender treasury user sees only the open request's borrower profile/documents; private approvals/storage paths are not visible.
+- [x] Publication self-approval, stale/replayed approvals and changes to published terms/documents are rejected.
+- [x] Requests past their deadline are removed from lender lists/details/downloads immediately; rerunning the expiry job does not create duplicate events.
+- [x] A Bank A user cannot find a Bank B private deal by ID.
+- [x] A lender cannot see competitor bids.
+- [x] Borrower comparison/deal API, HTML and audit views do not reveal pre-fee lender identity/instructions.
+- [x] Cross-request offer tokens, self-selection approval, stale/replayed decisions and withdrawn/expired/ineligible offer selection are rejected.
+- [x] Database constraints and the request lock enforce uniqueness of the active lender offer, pending selection and winning deal.
+- [x] Competing selection proposals/approvals, duplicate/extra payments and simultaneous settlement approvals in separate PostgreSQL backend sessions are limited to one winner/allocation/event.
+- [x] In-app notifications and the deal timeline have no identity/reference/narrative leakage; current role and recipient isolation are enforced.
+- [ ] Re-verify the anonymity rules when email notifications and exports are implemented.
+- [x] After fee verification, only the selected lender is visible to the relevant treasury users through a separate audited disclosure view.
+- [x] Unsigned/fake, wrong amount/currency/deal, replay-conflicting and late payments cannot unlock; there is no ordinary user/admin paid override.
+- [x] Admin/Auditor/platform accounts, copied payment proof and revoked/suspended membership cannot bypass disclosure.
+- [x] Fee exception details require a platform reason/audit; refund attestations and instruction changes enforce bank/role/state limits.
+- [x] Confirmation self-approval, cross-bank review, duplicate/replayed approvals, stale instructions/members and forged fields are rejected.
+- [x] One-bank approval does not mark Settled; operations cannot fabricate a successful settlement without evidence from both parties.
+- [x] Disputed instruction corrections preserve old evidence and supersede previous confirmations; two fresh approvals are required.
+- [x] Self-approval, self-promotion, arbitrary status updates and revoked membership access are rejected.
+- [x] Suspension or a role change cannot be bypassed through a cached response/download.
+- [x] The borrower's receiving instructions are hidden from the lender until the fee is verified, and from Admin-only, Auditor-only, unrelated and platform accounts afterwards.
+- [x] Staff names in the audit history appear only within their own institution; private reasons are not shown.
+- [x] An unrelated bank user holding all four roles is denied on every parameterised route.
+- [x] The Home work queue uses the same policies as the actions, offers no self-approval and never names a lender to a borrower.

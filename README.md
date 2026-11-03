@@ -1,5 +1,7 @@
 # XFunding Hub
 
+**Language:** English · [Singlish (සිංහල)](README.si.md)
+
 B2B interbank liquidity marketplace. Product scope and implementation order are in [docs/README.md](docs/README.md).
 
 ## Current milestone
@@ -23,6 +25,9 @@ Bank onboarding, access control, funding requests, blind offer selection, demo f
 - Independently approved pre-payment instruction changes with encrypted history.
 - Separate maker–checker settlement attestations from each bank, disputes and audited operations resolutions.
 - Role-based in-app notifications and a paginated deal timeline.
+- Borrower receiving instructions, chosen with each selection and disclosed to the selected lender only after fee verification.
+- Institution audit history, platform account administration, instruction version retirement and reinstatement of revoked staff.
+- A role-aware Home page, a progress tracker and one clear next step on every request, offer and deal.
 
 The demo workflow is verified on PostgreSQL, including concurrent sessions and an isolated backup restore. Live preparation remains in [the delivery plan](docs/04-delivery-plan.md). Payments currently use a synthetic local/test adapter; no real money is collected and it is disabled in production. Settlement records are bank attestations, not independent verification of an interbank transfer. The previous sample loan endpoints are disabled; their old models/states are retained as unused sample code.
 
@@ -86,9 +91,9 @@ For the funding workflow, sign in as `borrower.maker@xfunding.example` and open 
 
 On an existing installation, add only the funding examples with `php artisan db:seed --class=DemoFundingRequestSeeder`. This seeder skips existing examples and preserves bank profiles, verification and memberships. Running the full demo bank seeder again resets demo account/bank settings.
 
-To add the blind-offer examples to an existing installation, run `php artisan db:seed --class=DemoMarketplaceSeeder`. It adds a separate synthetic verified lender (Meridian Bank), approved instructions and two offers for each open demo request. Existing bank decisions, accounts and offer history are preserved, including any suspension of Summit Bank. The comparison contains an unsecured 8.1250% offer and a 7.9000% offer requiring sovereign bonds.
+To add the blind-offer examples to an existing installation, run `php artisan db:seed --class=DemoMarketplaceSeeder`. It adds a separate synthetic verified lender (Meridian Bank), approved instructions, two offers for each open demo request and an approved receiving version for the demo borrower. Existing bank decisions, accounts and offer history are preserved, including any suspension of Summit Bank. The comparison contains an unsecured 8.1250% offer and a 7.9000% offer requiring sovereign bonds.
 
-Open a published request as the borrower maker and choose **Compare offers**. Propose one offer, then sign in as the borrower approver to approve selection. The result is a locked deal; lender names, contacts and settlement accounts stay hidden. **Offer comparison walkthrough** provides a separate request for trying selection while **Working capital liquidity** remains available for comparison. All demo accounts use the password above.
+Open a published request as the borrower maker and choose **Compare offers**. Choose your receiving account and propose one offer, then sign in as the borrower approver to approve selection. The result is a locked deal; lender names, contacts and settlement accounts stay hidden. **Offer comparison walkthrough** provides a separate request for trying selection while **Working capital liquidity** remains available for comparison. All demo accounts use the password above.
 
 ## Funding request rules
 
@@ -102,13 +107,13 @@ Verified lender makers/approvers can read open, unexpired requests from eligible
 
 ## Blind offers and selection rules
 
-Lender makers propose settlement instructions and a different lender approver approves each immutable version. Account/contact details and selected instruction snapshots are encrypted in the database. Only own-bank maker/approver users can read these versions. BIC syntax accepts 8 or 11 characters with an alphabetic country element, following the [Swift BIC policy](https://www2.swift.com/knowledgecentre/rest/v1/publications/bic_policy/_latest/bic_policy.pdf?logDownload=true). Account/routing verification remains part of the institution's approval process.
+Treasury makers at a lender or borrower bank propose settlement instructions and a different approver at that bank approves each immutable version. Account/contact details and selected instruction snapshots are encrypted in the database. Only own-bank maker/approver users can read these versions. BIC syntax accepts 8 or 11 characters with an alphabetic country element, following the [Swift BIC policy](https://www2.swift.com/knowledgecentre/rest/v1/publications/bic_policy/_latest/bic_policy.pdf?logDownload=true). Account/routing verification remains part of the institution's approval process. An approver can retire an outdated version once no active offer, pending selection or open deal uses it.
 
 Offers cover the full published amount/currency/tenor. The demo quotes annual simple percentage rates as decimal strings, 0–100 with up to four decimal places; rates use integer units internally. Structured conditions are `unsecured` / `sovereign_bonds` and interest payment `at_maturity` / `monthly`. Offer validity must cover the bidding deadline and end on or before settlement day (UTC). Arbitrary lender text, contact fields and attachments are excluded from the borrower comparison.
 
 Draft edits supersede pending offer approvals, and publication contributors cannot approve their own work. One lender bank can have one active offer per request. Active terms are immutable: withdraw and obtain approval of a replacement. Labels and random comparison tokens belong to one request; borrower payloads contain no internal offer IDs, lender bank IDs, instruction IDs or actors. Lenders can read only their own offers. Own-bank admin/auditor users can read offer terms, with banking instruction fields excluded.
 
-Borrower maker selection and independent borrower approval are separate actions. Approval locks the request, rechecks both banks, offer version/validity and approved instruction identity, snapshots selected terms/instructions and closes losing offers. Unique database constraints enforce one pending selection and one deal per request. Pending cancellation and selection proposals cannot coexist. The selected lender retains access to borrower financial evidence; other lenders lose that access once the request closes.
+Borrower maker selection and independent borrower approval are separate actions. The proposal names one of the bank's approved versions as the receiving account, and an offer with less than 60 minutes of validity left cannot be selected. Approval locks the request, rechecks both banks, offer version/validity and approved instruction identity, snapshots selected terms and both banks' instructions and closes losing offers. Unique database constraints enforce one pending selection and one deal per request. Pending cancellation and selection proposals cannot coexist. The selected lender retains access to borrower financial evidence; other lenders lose that access once the request closes.
 
 ## Demo fee payment and disclosure
 
@@ -129,7 +134,7 @@ Sign in as the borrower approver, open **Selected deals**, and choose **Request 
 php artisan payments:simulate 'XFP-REPLACE-WITH-THE-DISPLAYED-REFERENCE'
 ~~~
 
-The command also accepts the fee-payment ID. It sends a synthetic signed notification through the same authentication, validation and verification handler as `POST /api/payments/demo/notifications`. It does not contact a payment provider or move money. After verification, refresh the deal and open **View settlement details** as a participating bank's authorized treasury maker/approver. Ordinary deal responses continue to omit lender identities and banking details; every disclosure is separately authorized, audited and non-cacheable. Admin-only, auditor-only and platform accounts cannot use this view.
+The command also accepts the fee-payment ID. It sends a synthetic signed notification through the same authentication, validation and verification handler as `POST /api/payments/demo/notifications`. It does not contact a payment provider or move money. After verification, refresh the deal and open **View settlement details** as a participating bank's authorized treasury maker/approver. It shows the lender's account and the borrower's receiving account. Ordinary deal responses continue to omit lender identities and banking details; every disclosure is separately authorized, audited and non-cacheable. Admin-only, auditor-only and platform accounts cannot use this view.
 
 Only an owning borrower approver can initiate a payment. The server determines the amount and reference; neither bank users nor operations can mark a fee paid or bypass verification. The handler authenticates the timestamp and raw payload signature, validates exact amount/currency/deal/reference and current bank/instruction eligibility, and atomically verifies the receipt and unlocks the deal. Cancelled reservations cannot be revived by late payment.
 
@@ -137,7 +142,7 @@ To exercise failure cases, the simulator supports `--outcome=failed`, `--amount=
 
 Operations can review payment exceptions at `/operations/payments`; detailed receipt access requires a recorded reason. Wrong, late, unmatched or additional receipts enter refund review. Recording a refund reference is a manual attestation only and never executes a refund transfer. Refunding an additional receipt does not remove the original verified payment. Actual provider verification, reconciliation and refund execution remain launch work.
 
-Before payment, a lender maker can propose a different approved instruction version for independent lender approval. Pending payment attempts or refund reviews block changes, and pending changes block payment. Approved changes preserve the old encrypted snapshot and fee/financial terms, with an identity-free borrower notice. After unlock, changes require an open dispute and independent lender review; approving a correction supersedes previous confirmations and requires both institutions to attest again.
+Before payment, a maker at either bank can propose a different approved version of its own instructions for independent approval within that bank. Pending payment attempts or refund reviews block changes, and pending changes block payment. Approved changes preserve the old encrypted snapshot and fee/financial terms, with an identity-free notice. After unlock, changes require an open dispute and independent review by the same bank; approving a correction supersedes previous confirmations and requires both institutions to attest again.
 
 ## Settlement and disputes
 
@@ -145,7 +150,7 @@ After fee verification, each participating bank's maker can propose a settlement
 
 One approved institution keeps the deal `Unlocked`. Two independently approved confirmations against the current instruction version atomically mark both the deal and funding request `Settled`. Payment proof, bank eligibility and approved instructions are rechecked under the existing bank/request/deal locks. No browser or operations action can substitute for either institution's approval.
 
-An owning bank approver can open an issue while the deal is unlocked. The deal becomes `Disputed`. Institutions may continue collecting attestations, but both confirmations do not automatically finalize a disputed deal. Operations reviews it at `/operations/disputes`; reading evidence requires a reason and an audit record. A `Settled` resolution requires both approved confirmations and current eligibility/instructions. Otherwise operations can record a reasoned `ClosedUnsettled` outcome, which cancels the request and supersedes pending attestations. This does not execute or reverse any transfer or refund a platform fee.
+An owning bank approver can open an issue while the deal is unlocked. The deal becomes `Disputed`. Institutions may continue collecting attestations, but both confirmations do not automatically finalize a disputed deal. Operations reviews it at `/operations/disputes`; reading evidence requires a reason and an audit record. A `Settled` resolution requires both approved confirmations and current eligibility/instructions. Otherwise operations can record a reasoned `ClosedUnsettled` outcome, which cancels the request and supersedes pending attestations and instruction reviews. This does not execute or reverse any transfer or refund a platform fee.
 
 To prepare a synthetic pending borrower attestation on an existing paid demo deal:
 
@@ -157,7 +162,36 @@ This optional local/test seeder preserves bank profiles and existing confirmatio
 
 The current **Offer comparison walkthrough** example has completed both synthetic attestations and an audited dispute resolution. **Working capital liquidity** remains available to compare offers. Start a new request to repeat the entire workflow; completed histories are preserved.
 
-**Notifications** are in-app database notifications. Pending confirmations notify the same bank's other approvers; rejections notify its makers; outcomes notify eligible staff at both banks. Reads and acknowledgements recheck the current recipient, bank, role and deal relationship. Messages and timelines contain fixed status text, with no lender names, account/contact fields, actors, references or private narratives. Settlement emails and exports are not implemented. The deal timeline shows selection/fee milestones and paginated settlement events.
+**Notifications** are in-app database notifications. Pending confirmations notify the same bank's other approvers; rejections notify its makers; outcomes notify eligible staff at both banks. Selection, fee verification and reservation closure also notify eligible staff at both banks. Reads and acknowledgements recheck the current recipient, bank, role and deal relationship. Messages and timelines contain fixed status text, with no lender names, account/contact fields, actors, references or private narratives. Settlement emails and exports are not implemented. The deal timeline shows selection/fee milestones and paginated settlement events.
+
+## Workspace flow
+
+Signing in opens **Home**. It lists what needs the signed-in person now and what is in progress with someone else, using the same policies that guard the actions. The navigation shows that count on every page. Nothing in the queue names a lender to a borrower.
+
+Each funding request, offer and deal shows its progress and one next step for the current person, with the action on that card. A form submitted against a record that has changed returns to its page with the reason; API clients still receive 409. Lender makers can save an offer and send it for approval in one step. Amounts are grouped for reading only; API values stay exact decimal strings.
+
+The screens stay Blade and static CSS in `public/app.css`, with no build step or external assets.
+
+## Audit history, accounts and upgrades
+
+Bank admins, auditors and platform operations can open **Full audit history** on the bank page (`/banks/{bank}/audit-events`, `/api/v1/banks/{bank}/audit-events`). It is paginated and shows the action, actor, subject and time, without private reasons. Staff names appear only within their own institution. A bank user's action belongs to that user's institution history, so a lender's document download or settlement read appears for the lender and not the borrower. Events recorded before this rule keep their original bank and show the actor as `Another institution`.
+
+Create the first platform account on the server, which emails a password setup link:
+
+~~~sh
+php artisan platform:create-admin operations@example.test 'Full Name'
+~~~
+
+Platform admins then manage accounts at `/operations/accounts`. Each action records a reason and nobody can deactivate their own account. Bank admins can request reinstatement of a revoked colleague from the team list; it needs the same independent approval as a role change.
+
+To update an existing installation, retain .env and APP_KEY and run:
+
+~~~sh
+lerd php artisan migrate --no-interaction
+lerd php artisan db:seed --class=DemoMarketplaceSeeder
+~~~
+
+Deals selected earlier have no borrower receiving version. Open ones cannot be paid or settled until a borrower maker proposes a version on the deal page and a different approver approves it. Their lender disclosure stays available, and closed deals are unaffected.
 
 ## Tests
 
@@ -167,11 +201,11 @@ lerd php vendor/bin/pest --configuration=phpunit.pgsql.xml --compact
 lerd php vendor/bin/pint --dirty --format agent
 ~~~
 
-Tests use isolated PostgreSQL and in-memory SQLite databases with fake mail/storage. They cover bank isolation, maker–checker approvals, private downloads, exact amounts, immutable snapshots, anonymous comparison, winner constraints, authenticated payment notifications, atomic unlock/settlement, restricted disclosure, refund review, corrective instruction changes, disputes, role-based notifications and bounded query counts. The latest PostgreSQL run passed **423 tests / 1,847 assertions**. The SQLite run passed 411 tests / 1,783 assertions, with 12 PostgreSQL-only tests skipped.
+Tests use isolated PostgreSQL and in-memory SQLite databases with fake mail/storage. They cover bank isolation, maker–checker approvals, private downloads, exact amounts, immutable snapshots, anonymous comparison, winner constraints, authenticated payment notifications, atomic unlock/settlement, restricted disclosure, refund review, corrective instruction changes, disputes, role-based notifications and bounded query counts. The latest PostgreSQL run passed **544 tests / 2,870 assertions**. The SQLite run passed 532 tests / 2,805 assertions, with 12 PostgreSQL-only tests skipped. `RenderedFormsJourneyTest` submits only what the rendered forms contain, like a browser, following the Home page from draft to settled.
 
 phpunit.xml forces an in-memory SQLite database. phpunit.pgsql.xml forces the local Lerd database xfunding_hub_testing; never point it at retained data. Concurrency tests deliberately rebuild that test database and must run serially, without --parallel. They synchronize separate PostgreSQL backend sessions for competing selections, duplicate/extra payment receipts and simultaneous settlement approvals. The complete HTTP journey exercises both possible lender winners, refund review, disclosure and settlement without a real payment provider.
 
-Session-authenticated offer/instruction endpoints are `/api/v1/offers` and `/api/v1/settlement-instructions`; selected deals use `/api/v1/deals/{deal}`. Borrower comparison is `GET /api/v1/funding-requests/{request}/offers`; selection proposals use `POST /api/v1/funding-requests/{request}/selection` with `offer_token`. Use `php artisan route:list` for explicit review/withdrawal routes.
+Session-authenticated offer/instruction endpoints are `/api/v1/offers` and `/api/v1/settlement-instructions`; selected deals use `/api/v1/deals/{deal}`. Borrower comparison is `GET /api/v1/funding-requests/{request}/offers`; selection proposals use `POST /api/v1/funding-requests/{request}/selection` with `offer_token` and `settlement_instruction_id`. Use `php artisan route:list` for explicit review/withdrawal routes.
 
 Fee initiation uses `POST /api/v1/deals/{deal}/fee-payments`; disclosure uses `GET /api/v1/deals/{deal}/settlement-instructions`. These routes use session authentication and CSRF for mutations. The separate demo notification endpoint uses a timestamped HMAC signature instead of a browser session and refuses production even if demo configuration is enabled.
 
@@ -187,4 +221,4 @@ Browser checks confirmed the migrated settled deal, in-app feed and selected len
 
 A PostgreSQL SQL export was restored into a separate temporary database. Counts and canonical row-content hashes matched across 29 persistent tables. The recovery databases were removed afterwards. A private temporary export remains under /tmp/xfunding-runtime/recovery-check/; it is a rehearsal artifact, not a durable backup. A production recovery plan must include the private documents, original application key, off-host encrypted backups and a tested recovery target.
 
-Payment-provider selection remains deferred. Real payment verification/reconciliation/refunds, staff MFA, production secret and backup management, monitoring, retention rules, bank due diligence, platform terms and regulatory review remain launch work. Demo-ready does not mean live-ready.
+Browser hardening headers are in place; set `SESSION_SECURE_COOKIE=true` for HTTPS deployments. Payment-provider selection remains deferred. Real payment verification/reconciliation/refunds, staff MFA, production secret and backup management, monitoring, retention rules, bank due diligence, platform terms and regulatory review remain launch work. Demo-ready does not mean live-ready.

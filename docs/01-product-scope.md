@@ -1,84 +1,88 @@
 # 01 — Product scope
 
-## අරමුණ
+**Language:** English · [Singlish (සිංහල)](01-product-scope.si.md)
 
-Wholesale liquidity අවශ්‍ය බැංකුවක්, ණය දීමට කැමති verified බැංකු සමඟ සම්බන්ධ කිරීම. Lenders ට borrower බැංකුවේ identity සහ අදාළ financial documents පෙනෙනවා. Borrower ට offer terms පෙනෙන නමුත් platform fee එක verify වන තුරු lender identity පෙනෙන්නේ නැහැ.
+## Purpose
 
-Platform එක loan principal එක තබාගන්නේ හෝ හුවමාරු කරන්නේ නැහැ. බැංකු දෙක තම නිල banking channels හරහා settlement කරනවා. Platform එක ගන්නේ තම සේවා ගාස්තුවයි; MVP එකේ escrow service එකක් සපයන්නේ නැහැ.
+Connect a bank that needs wholesale liquidity with verified banks willing to lend. Lenders can see the borrower bank's identity and relevant financial documents. The borrower can see offer terms, but cannot see the lender's identity until the platform fee is verified.
 
-## පාර්ශ්වයන්
+The platform does not hold or transfer the loan principal. The two banks settle through their own official banking channels. The platform only collects its service fee; the MVP does not provide an escrow service.
 
-| පාර්ශ්වය | වගකීම |
+## Parties
+
+| Party | Responsibility |
 |---|---|
-| Borrower Bank | Financial profile ඉදිරිපත් කිරීම, request පළ කිරීම, offer තේරීම, fee ගෙවීම, settlement confirm කිරීම |
-| Lender Bank | Borrower assess කිරීම, offer ඉදිරිපත් කිරීම, settlement instructions ලබාදීම, settlement confirm කිරීම |
-| Platform Operations | Banks verify කිරීම, platform access පාලනය, fee exceptions සහ disputes හසුරුවීම |
+| Borrower Bank | Submit a financial profile, publish requests, provide receiving instructions, select an offer, pay the fee, confirm settlement |
+| Lender Bank | Assess the borrower, submit offers, provide settlement instructions, confirm settlement |
+| Platform Operations | Verify banks, control platform access, handle fee exceptions and disputes |
 
-Borrower/Lender යනු බැංකුවක business capabilities. Bank Admin/Maker/Approver/Auditor යනු එම බැංකුවේ users ගේ roles. එකම බැංකුවට capabilities දෙකම තිබිය හැකියි.
+Borrower/Lender are a bank's business capabilities. Bank Admin/Maker/Approver/Auditor are the roles of that bank's users. The same bank can have both capabilities.
 
-## MVP එකට ඇතුළත් දේ
+## Included in the MVP
 
-- Bank onboarding, platform verification සහ invitation මඟින් staff එකතු කිරීම.
-- Bank profiles, request එකට අදාළ audit reports සහ private document access.
-- Funding requests: amount, currency, tenor, settlement date සහ bid deadline.
-- Lenders කිහිපදෙනෙකුගෙන් offers; borrower සඳහා anonymous comparison.
-- Maker–checker approvals සහ bank-scoped permissions.
-- එක් offer එකක් තෝරා ගැනීම, platform fee record කිරීම සහ verified payment එකෙන් identity unlock කිරීම.
-- දෙපාර්ශ්වයෙන් settlement confirmation, basic dispute handling සහ audit history.
-- Bank dashboard එකේ borrower/lender views සහ සීමිත operations dashboard එකක්.
+- Bank onboarding, platform verification and adding staff by invitation.
+- Bank profiles, request-specific audit reports and private document access.
+- Funding requests: amount, currency, tenor, settlement date and bid deadline.
+- Offers from multiple lenders; anonymous comparison for the borrower.
+- Maker–checker approvals and bank-scoped permissions.
+- Selecting one offer, recording the platform fee and unlocking identity with a verified payment.
+- Settlement confirmation from both parties, basic dispute handling and audit history.
+- Borrower/lender views in the bank dashboard and a limited operations dashboard.
 
 ## Working defaults
 
-මේවා implementation සරල කරගැනීමට යෝජිත defaults. වෙනස් කරනවා නම් ඒ වෙනස development පටන්ගන්න පෙර අදාළ tasks වලට ඇතුළත් කරන්න.
+These are proposed defaults to keep the implementation simple. If you change any of them, include the change in the relevant tasks before development starts.
 
-| කරුණ | MVP default |
+| Item | MVP default |
 |---|---|
-| Offer coverage | Request එකේ සම්පූර්ණ amount එක, currency එක සහ tenor එක සඳහා offer එකක් |
-| Winner | එක් request එකකට එක් lender bank එකක් |
+| Offer coverage | One offer for the request's full amount, currency and tenor |
+| Winner | One lender bank per request |
 | Fee payer | Borrower Bank |
-| Offer selection | Borrower විසින් terms සසඳා තෝරයි; අඩුම rate එක ස්වයංක්‍රීයව තෝරන්නේ නැහැ |
-| Application database | PostgreSQL; user decision 2026-10-16; local PostgreSQL 16.14. SQLite fast tests සහ retained source snapshot සඳහා පමණයි |
-| Staff membership | Bank user account එකකට එක් බැංකුවක්; platform staff වෙනම accounts |
-| Roles | Fixed roles; custom permission editor එකක් නැහැ |
-| Approvals | Publish, bid submission, selection සහ settlement confirmation සඳහා වෙනත් user කෙනෙකුගේ approval |
-| Initial payment demo | Test payment adapter එකක්; එය production payment verification එකක් ලෙස භාවිතා නොකරන්න |
-| Approved demo fee | Principal එකෙන් 10 bps (0.1%); loan currency එකම; smallest currency unit දක්වා round up; simulated tax 0 |
-| Approved demo payment window | Selection සිට පැය 24; selected offer expiry එකට සීමා වේ; quote/deadline/policy freeze වේ |
-| Approved demo refund handling | Manual review සහ refund reference attestation; app එක refund transfer execute නොකරයි |
-| Request validation demo | LKR/USD/GBP; decimal places 2; tenor දින 1–3,650; ACT/360 හෝ ACT/365F; annualized simple rate basis |
-| Financial documents | Request එකකට අවම PDF එකක්; file එකකට උපරිම 10 MB; onboarding evidence වලින් වෙන්ව private storage |
-| Deadlines | UTC; අනාගත bid deadline එක settlement date එකට පසුව විය නොහැක |
-| Offer validation demo | Annual simple percentage rate 0–100; decimal places 4; full request amount/currency/tenor |
-| Structured offer conditions | Unsecured හෝ sovereign bonds; interest payment at maturity හෝ monthly; lender free text/attachments නැහැ |
-| Settlement instructions | Own lender treasury staff පමණක් කියවන encrypted, independently approved immutable versions |
+| Offer selection | The borrower compares terms and chooses; the lowest rate is not selected automatically |
+| Application database | PostgreSQL; user decision 2026-10-16; local PostgreSQL 16.14. SQLite only for fast tests and the retained source snapshot |
+| Staff membership | One bank per bank user account; separate accounts for platform staff |
+| Roles | Fixed roles; no custom permission editor |
+| Approvals | Another user's approval for publishing, bid submission, selection and settlement confirmation |
+| Initial payment demo | A test payment adapter; do not use it as production payment verification |
+| Approved demo fee | 10 bps (0.1%) of principal; same as the loan currency; round up to the smallest currency unit; simulated tax 0 |
+| Approved demo payment window | 24 hours from selection; capped at the selected offer's expiry; quote/deadline/policy are frozen |
+| Approved demo refund handling | Manual review and refund reference attestation; the app does not execute refund transfers |
+| Request validation demo | LKR/USD/GBP; 2 decimal places; tenor 1–3,650 days; ACT/360 or ACT/365F; annualized simple rate basis |
+| Financial documents | At least one PDF per request; maximum 10 MB per file; private storage separate from onboarding evidence |
+| Deadlines | UTC; the future bid deadline cannot be after the settlement date |
+| Offer validation demo | Annual simple percentage rate 0–100; 4 decimal places; full request amount/currency/tenor |
+| Structured offer conditions | Unsecured or sovereign bonds; interest payment at maturity or monthly; no lender free text/attachments |
+| Settlement instructions | Encrypted, independently approved immutable versions readable only by the bank's own treasury staff; each deal records the lender's version and the borrower's receiving version, and both are disclosed to the two banks' treasury staff only after the fee is verified |
+| Minimum fee window | An offer cannot be selected with less than 60 minutes of validity left (`marketplace.minimum_fee_window_minutes`) |
+| Platform accounts | Created by a platform admin or the `platform:create-admin` console command, with a recorded reason; approved by one person until live rules are decided |
 
-## පසුව කරන දේ
+## Later
 
-Partial fills/syndicated loans, auctions with automatic matching, open chat, lender attachments before unlock, automated credit scoring, principal custody, direct RTGS/SWIFT integration, repayment servicing, SSO සහ multi-bank user accounts MVP එකෙන් පිටතයි.
+Partial fills/syndicated loans, auctions with automatic matching, open chat, lender attachments before unlock, automated credit scoring, principal custody, direct RTGS/SWIFT integration, repayment servicing, SSO and multi-bank user accounts are outside the MVP.
 
-## නිශ්චිත කරගත යුතු business decisions
+## Business decisions to confirm
 
-අදියර 0–5 implementation එකේ bank access, funding requests, blind offers/selection, demo fee verification/disclosure, settlement attestations/disputes, in-app notifications සහ deal timeline තිබෙනවා. Laravel 13 / PHP 8.4+ monolith එක, Blade UI එක, local PostgreSQL application database, isolated PostgreSQL/SQLite test databases සහ database queue එක භාවිතා කරනවා. දැනට local demo එක Lerd PHP 8.4.25 / PostgreSQL 16.14 මත ක්‍රියාත්මකයි; පෙර native PHP 8.5 preview එක නවතා තිබෙනවා. Verification යනු authorized platform reviewer කෙනෙකු reason එකක් සමඟ කරන manual approval එකක්; real-bank due-diligence process එක තවම තීරණය කරලා නැහැ. Demo seed එකේ LK metadata සහ bank identities/documents synthetic data පමණයි. Request conventions ඉහත working defaults අනුව implement කරලා තිබෙනවා; ඒවා live business decisions ලෙස තහවුරු කළ බව අදහස් නොවේ.
+The Phase 0–5 implementation includes bank access, funding requests, blind offers/selection, demo fee verification/disclosure, settlement attestations/disputes, in-app notifications and a deal timeline. It uses a Laravel 13 / PHP 8.4+ monolith, a Blade UI, a local PostgreSQL application database, isolated PostgreSQL/SQLite test databases and a database queue. The local demo currently runs on Lerd PHP 8.4.25 / PostgreSQL 16.14; the earlier native PHP 8.5 preview has been stopped. Verification is a manual approval by an authorized platform reviewer with a reason; the real-bank due-diligence process has not been decided yet. The LK metadata and bank identities/documents in the demo seed are synthetic data only. Request conventions are implemented according to the working defaults above; this does not mean they have been confirmed as live business decisions.
 
-Amounts database එකේ integer minor units ලෙසත් API එකේ decimal strings ලෙසත් තබනවා. Demo සීමාව `0.01` සිට `999999999999.99`; floating-point money භාවිතා කරන්නේ නැහැ. Offer rates integer units ලෙස තබා decimal strings ලෙස පෙන්වනවා; annualized simple percentage rate එකකට decimal places 4ක් තිබෙනවා. Legal interest calculation/servicing තවම MVP එකෙන් පිටතයි.
+Amounts are stored as integer minor units in the database and as decimal strings in the API. The demo range is `0.01` to `999999999999.99`; floating-point money is not used. Offer rates are stored as integer units and shown as decimal strings; an annualized simple percentage rate has 4 decimal places. Legal interest calculation/servicing is still outside the MVP.
 
-**Demo decision — 2026-10-16:** User විසින් ඉහත 10 bps, same-currency, පැය 24, tax 0 සහ manual refund-review defaults භාවිතා කිරීමට තහවුරු කළා. Fee base එක `ceil(principalMinor × 10 / 10000)` ලෙස integer arithmetic මඟින් ගණනය කරනවා. Quote එක selection transaction එකේ freeze කර approved policy version එක snapshot කරනවා. Existing selected deals සඳහා quote කළත් deadline එක original selection time එකෙන් ගණනය කරනවා. Test adapter එක local/testing තුළ explicit enable කළ විට පමණක් ක්‍රියාත්මක වේ; production වල unlock නොකරයි. Real pricing, tax සහ refund obligations තවම තහවුරු කර නැහැ.
+**Demo decision — 2026-10-16:** The user confirmed using the 10 bps, same-currency, 24-hour, tax 0 and manual refund-review defaults above. The fee base is calculated with integer arithmetic as `ceil(principalMinor × 10 / 10000)`. The quote is frozen in the selection transaction and the approved policy version is snapshotted. Even when existing selected deals are quoted, the deadline is calculated from the original selection time. The test adapter only works when explicitly enabled in local/testing; it does not unlock in production. Real pricing, tax and refund obligations are not yet confirmed.
 
-Settlement confirmations යනු banks දෙකේ independently approved attestations; platform transfer verification නොවේ. References/notes encrypted සහ own treasury staff ට පමණයි. In-app notifications generic status text වලට සීමා වේ; email notifications/exports මේ implementation එකට ඇතුළත් නැහැ. Dispute තුළ instruction correction කළොත් old evidence preserve කර confirmations supersede කරනවා; නැවත දෙපාර්ශ්වයේ approval අවශ්‍යයි.
+Settlement confirmations are independently approved attestations from the two banks; they are not platform transfer verification. References/notes are encrypted and available only to the bank's own treasury staff. In-app notifications are limited to generic status text; email notifications/exports are not included in this implementation. If an instruction is corrected during a dispute, the old evidence is preserved and confirmations are superseded; approval from both parties is required again.
 
-| තීරණය | අවශ්‍ය වන වෙලාව |
+| Decision | When it is needed |
 |---|---|
-| Launch market, eligible banks, currencies, verification requirements සහ tenor/rate conventions | Real banks සමඟ onboarding/request validation භාවිතා කිරීමට පෙර; demo defaults ඉහත දක්වා ඇත |
-| Live fee formula/currency, taxes, payment window, refunds සහ failed-deal rules | Real payment flow සක්‍රිය කිරීමට පෙර; demo defaults පමණක් ඉහත අනුමත කර ඇත |
-| Payment provider හෝ independently verified bank-transfer process | Production payment integration කිරීමට පෙර |
-| Terms, anti-circumvention agreement, document retention සහ jurisdiction-specific regulatory review | Real banks/data සමඟ live භාවිතයට පෙර |
+| Launch market, eligible banks, currencies, verification requirements and tenor/rate conventions | Before using onboarding/request validation with real banks; demo defaults are listed above |
+| Live fee formula/currency, taxes, payment window, refunds and failed-deal rules | Before enabling a real payment flow; only demo defaults are approved above |
+| Payment provider or an independently verified bank-transfer process | Before production payment integration |
+| Terms, anti-circumvention agreement, document retention and jurisdiction-specific regulatory review | Before live use with real banks/data |
 
-Non-custodial යන්න මේ product එකේ මුදල් හසුරුවන සීමාවයි. Licensing හෝ වෙනත් regulatory obligations ගැන නිගමනයක් මේ documents තුළ කරලා නැහැ.
+Non-custodial is this product's boundary for handling money. These documents do not reach any conclusion about licensing or other regulatory obligations.
 
-Borrower identity lenders ට පෙනෙන නිසා lenders විසින් සෘජුව borrower අමතන හැකියාව identity hiding එකෙන් පමණක් වළක්වන්න බැහැ. Platform agreements සහ operational rules ද business design එකේ කොටසක් විය යුතුයි.
+Because lenders can see the borrower's identity, identity hiding alone cannot stop lenders from contacting the borrower directly. Platform agreements and operational rules must also be part of the business design.
 
-**Database decision — 2026-10-16:** User විසින් PostgreSQL තෝරා payment verification ක්‍රමය/provider තීරණය පසුවට තැබුවා. Existing user-edited bank profiles, memberships, documents, encrypted fee/deal/settlement evidence සහ notifications local PostgreSQL වෙත migrate කර තිබෙනවා. Source SQLite file එක unchanged ලෙස රැකෙනවා. Separate PostgreSQL sessions වල selection/payment/settlement races සහ isolated SQL backup restore verify කළා. Production hosting, MFA, key/backup management සහ retention තවම pending.
+**Database decision — 2026-10-16:** The user chose PostgreSQL and deferred the payment verification method/provider decision. Existing user-edited bank profiles, memberships, documents, encrypted fee/deal/settlement evidence and notifications have been migrated to local PostgreSQL. The source SQLite file is kept unchanged. Selection/payment/settlement races in separate PostgreSQL sessions and an isolated SQL backup restore were verified. Production hosting, MFA, key/backup management and retention are still pending.
 
-## MVP සාර්ථක බව පෙන්වන scenario එක
+## Scenario that shows the MVP works
 
-Verified borrower bank එක request එකක් publish කරනවා. Verified lender banks දෙකක් offers දානවා. Borrower terms සසඳන අතර lender identities නොපෙනේ. Approver කෙනෙක් එක් offer එකක් select කරනවා. Fee verify වුණාම එම lender ගේ විස්තර පමණක් unlock වෙනවා. දෙපාර්ශ්වයම settlement confirm කළාම deal එක settled වෙනවා.
+A verified borrower bank publishes a request. Two verified lender banks submit offers. The borrower compares terms without seeing lender identities. An approver selects one offer. Once the fee is verified, only that lender's details are unlocked. When both parties confirm settlement, the deal becomes settled.
