@@ -47,6 +47,17 @@ class FundingRequest extends Model
         return intdiv($amount, 100).'.'.str_pad((string) ($amount % 100), 2, '0', STR_PAD_LEFT);
     }
 
+    /**
+     * Groups thousands for display only; the value stays an exact decimal string.
+     */
+    public static function groupDecimal(string $amount): string
+    {
+        [$whole, $fraction] = array_pad(explode('.', $amount, 2), 2, null);
+        $grouped = preg_replace('/\B(?=(\d{3})+$)/', ',', $whole);
+
+        return $fraction === null ? $grouped : $grouped.'.'.$fraction;
+    }
+
     public static function amountToMinor(string $amount): int
     {
         [$whole, $fraction] = array_pad(explode('.', $amount, 2), 2, '');

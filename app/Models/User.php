@@ -64,6 +64,13 @@ class User extends Authenticatable
             && $this->membership->bank->status === BankStatus::Verified;
     }
 
+    public function canManageSettlementInstructions(): bool
+    {
+        return $this->hasVerifiedBankAccess()
+            && ($this->membership->bank->can_lend || $this->membership->bank->can_borrow)
+            && ($this->hasBankRole(BankRole::Maker) || $this->hasBankRole(BankRole::Approver));
+    }
+
     public function canBrowseMarketplace(): bool
     {
         return $this->hasVerifiedBankAccess() && $this->membership->bank->can_lend

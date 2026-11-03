@@ -15,7 +15,9 @@ class SettlementInstructionResource extends JsonResource
             'id' => $this->id, 'version' => $this->version, 'status' => $this->status,
             'bank' => $this->bank_profile, 'details' => $this->details, 'reason' => $this->reason,
             'reviewedAt' => $this->reviewed_at?->toIso8601String(),
+            'retiredAt' => $this->retired_at?->toIso8601String(),
             'canReview' => $this->status === 'pending' && Gate::allows('review', $this->resource),
+            'canRetire' => $this->status === 'approved' && Gate::allows('retire', $this->resource),
         ];
     }
 }

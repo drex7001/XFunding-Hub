@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\ManageFundingRequests;
+use App\BankRole;
 use App\BankStatus;
 use App\FundingRequestStatus;
 use App\Models\BankDocument;
@@ -39,7 +40,7 @@ it('lets verified lender treasury staff download only published request evidence
 
     $this->get(route('funding.documents.show', $document))->assertDownload('financial-report.pdf')->assertHeader('Cache-Control', 'no-store, private');
 
-    $this->assertDatabaseHas('audit_events', ['action' => 'funding.document_downloaded', 'actor_id' => $lender->id, 'bank_id' => $record->bank_id]);
+    $this->assertDatabaseHas('audit_events', ['action' => 'funding.document_downloaded', 'actor_id' => $lender->id, 'bank_id' => $lender->membership->bank_id]);
 });
 
 it('hides other banks draft documents with 404', function () {
@@ -144,4 +145,18 @@ it('stops financial downloads when the borrower loses verification with 404', fu
     $this->getJson(route('funding.documents.show', $document))->assertNotFound();
 
     $this->assertDatabaseCount('audit_events', 0);
+});
+
+it('does not reveal lender document activity in the borrower audit history', function () {
+    Storage::fake('private');
+    $auditor = bankStaff(BankRole::Auditor);
+    $record = FundingRequest::factory()->published()->create(['bank_id' => $auditor->membership->bank_id]);
+    $document = financialEvidence($record);
+    $lender = bankStaff();
+    signInUser($lender);
+    $this->get(route('funding.documents.show', $document))->assertOk();
+    $this->get(route('banks.show', $lender->membership->bank_id))->assertOk()->assertSee('Funding document downloaded');
+
+    signInUser($auditor);
+    $this->get(route('banks.show', $record->bank_id))->assertOk()->assertDontSee('Funding document downloaded');
 });

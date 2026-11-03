@@ -55,4 +55,14 @@ class SettlementInstructionController extends Controller
 
         return $request->expectsJson() || $request->is('api/*') ? new SettlementInstructionResource($record) : back()->with('status', 'Instruction review recorded. Existing offers retain their approved version.');
     }
+
+    public function retire(Request $request, SettlementInstruction $instruction, ManageSettlementInstructions $action): RedirectResponse|SettlementInstructionResource
+    {
+        Gate::authorize('view', $instruction);
+        Gate::authorize('retire', $instruction);
+        $data = $request->validate(['reason' => ['required', 'string', 'min:5', 'max:500']]);
+        $record = $action->retire($request->user(), $instruction, $data['reason']);
+
+        return $request->expectsJson() || $request->is('api/*') ? new SettlementInstructionResource($record) : back()->with('status', 'Instruction version retired. It can no longer be attached to new work.');
+    }
 }

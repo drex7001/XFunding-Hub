@@ -126,7 +126,7 @@ it('adds one synthetic pending attestation without resetting demo profiles or ve
     $deal = unlockedDeal();
     $maker = bankStaff(BankRole::Maker, $deal->borrowerBank);
     $maker->update(['email' => 'borrower.maker@xfunding.example']);
-    $deal->borrowerBank->update(['name' => 'User edited demonstration bank']);
+    renameBorrowerBank($deal, 'User edited demonstration bank');
     $this->seed(DemoSettlementSeeder::class);
     $this->seed(DemoSettlementSeeder::class);
     expect($deal->confirmations()->count())->toBe(1)
@@ -165,4 +165,22 @@ it('uses a database uniqueness constraint for approved bank attestations', funct
         'deal_id' => $deal->id, 'bank_id' => $deal->borrower_bank_id, 'pending_slot' => null,
         'status' => 'approved', 'approved_slot' => $record->approved_slot,
     ]))->toThrow(QueryException::class);
+});
+
+it('notifies participating staff when the fee is verified or the reservation closes', function () {
+    $payment = feePaymentAttempt();
+    $deal = $payment->deal;
+    $lender = bankStaff(BankRole::Maker, $deal->lenderBank);
+    $borrower = bankStaff(BankRole::Auditor, $deal->borrowerBank);
+    signedPaymentNotification(paymentNotificationPayload($payment))->assertOk();
+    expect($lender->notifications()->sole()->data['kind'])->toBe('fee.verified')
+        ->and($borrower->notifications()->sole()->data['kind'])->toBe('fee.verified');
+
+    $expiring = paymentDeal(bankStaff(BankRole::Maker));
+    $expiringLender = bankStaff(BankRole::Maker, $expiring->lenderBank);
+    $this->travelTo($expiring->fee_deadline->addMinute());
+    $this->artisan('deals:expire-fees')->assertSuccessful();
+    expect($expiringLender->notifications()->sole()->data['kind'])->toBe('cancelled');
+    signInUser($expiringLender);
+    $this->getJson(route('api.notifications.index'))->assertOk()->assertSee('Fee reservation closed.');
 });

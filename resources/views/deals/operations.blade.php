@@ -1,11 +1,26 @@
 <x-layout title="Settlement disputes">
-    <div class="page-heading"><div><span class="eyebrow">OPERATIONS REVIEW</span><h1>Settlement disputes.</h1><p class="muted">Review institution attestations and record a reasoned outcome. The platform does not execute or reverse transfers.</p></div></div>
-    <section class="panel">
+    <x-page-header title="Settlement disputes" meta="Review institution attestations and record a reasoned outcome. The platform does not execute or reverse transfers." />
+
+    <section class="panel panel--flush">
         @forelse ($records as $record)
-            <div class="review-row"><div><strong>Deal {{ $record->deal_id }}</strong><small>{{ $record->created_at->format('d M Y, H:i') }} UTC · {{ ucwords(str_replace('_', ' ', $record->status)) }}</small></div>
-                <form method="post" action="{{ route('disputes.review', $record) }}">@csrf<label for="reason-{{ $record->id }}">Access reason</label><input id="reason-{{ $record->id }}" name="reason" required minlength="8" maxlength="500"><button class="button secondary">Review dispute</button></form>
+            <div class="row row--flush">
+                <div class="row__text">
+                    <strong>Deal {{ strtoupper(substr($record->deal_id, -8)) }}</strong>
+                    <small>Opened <x-when :at="$record->created_at" /></small>
+                </div>
+                <x-status :value="$record->status === 'open' ? 'disputed' : $record->status" :label="ucfirst(str_replace('_', ' ', $record->status))" />
+                <form class="row-form" method="post" action="{{ route('disputes.review', $record) }}">
+                    @csrf
+                    <div>
+                        <label for="reason-{{ $record->id }}">Access reason</label>
+                        <input id="reason-{{ $record->id }}" name="reason" required minlength="8" maxlength="500" placeholder="Why you need to read the evidence">
+                    </div>
+                    <button class="btn btn--secondary">Review dispute</button>
+                </form>
             </div>
-        @empty<p class="empty">No settlement disputes recorded.</p>@endforelse
+        @empty
+            <x-empty-state title="No settlement disputes recorded" />
+        @endforelse
         {{ $records->links() }}
     </section>
 </x-layout>

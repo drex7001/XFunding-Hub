@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\DescribeWorkflowProgress;
 use App\Actions\ManageFundingRequests;
 use App\Http\Requests\StoreFundingRequest;
 use App\Http\Requests\UpdateFundingRequest;
 use App\Http\Resources\FundingRequestResource;
 use App\Models\FundingRequest;
 use App\Models\FundingRequestApproval;
+use App\Models\Offer;
+use App\OfferStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -59,7 +62,7 @@ class FundingRequestController extends Controller
         return redirect()->route('funding.show', $record)->with('status', 'Draft created. Attach financial documents before requesting publication.');
     }
 
-    public function show(Request $request, FundingRequest $fundingRequest): View|FundingRequestResource
+    public function show(Request $request, FundingRequest $fundingRequest, DescribeWorkflowProgress $progress): View|FundingRequestResource
     {
         Gate::authorize('view', $fundingRequest);
         $fundingRequest->load(['bank', 'documents', 'pendingApproval', 'pendingSelection', 'deal']);
@@ -67,11 +70,17 @@ class FundingRequestController extends Controller
             return new FundingRequestResource($fundingRequest);
         }
 
+        $bankId = $request->user()->membership->bank_id;
+        $owned = $bankId === $fundingRequest->bank_id;
+
         return view('funding.show', [
             'record' => $fundingRequest,
             'data' => (new FundingRequestResource($fundingRequest))->resolve($request),
-            'owned' => $request->user()->membership->bank_id === $fundingRequest->bank_id,
-            'history' => $request->user()->membership->bank_id === $fundingRequest->bank_id ? $fundingRequest->approvals()->latest()->limit(10)->get() : collect(),
+            'owned' => $owned,
+            'progress' => $progress->funding($fundingRequest),
+            'activeOffers' => $owned ? $fundingRequest->offers()->where('status', OfferStatus::Active)->where('valid_until', '>', now())->count() : 0,
+            'ownOffer' => $owned ? null : Offer::query()->where('funding_request_id', $fundingRequest->id)->where('bank_id', $bankId)->latest()->first(),
+            'history' => $owned ? $fundingRequest->approvals()->latest()->limit(10)->get() : collect(),
         ]);
     }
 

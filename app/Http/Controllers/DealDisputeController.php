@@ -36,11 +36,12 @@ class DealDisputeController extends Controller
     {
         Gate::authorize('view', $dispute);
         $data = $request->validate(['reason' => ['required', 'string', 'min:8', 'max:500']]);
-        $deal = $dispute->deal->load(['confirmations', 'borrowerBank', 'lenderBank', 'settlementInstruction.bank', 'verifiedPayment.verifiedReceipt', 'pendingInstructionChange', 'fundingRequest']);
+        $deal = $dispute->deal->load(['confirmations', 'borrowerBank', 'lenderBank', 'settlementInstruction.bank', 'borrowerInstruction.bank', 'verifiedPayment.verifiedReceipt', 'pendingInstructionChange', 'fundingRequest']);
         $audit->handle($request->user(), 'deal.dispute_reviewed', $deal, ['dispute_id' => $dispute->id, 'reason' => $data['reason']]);
         $details = ['id' => $dispute->id, 'dealId' => $deal->id, 'status' => $dispute->status,
             'description' => $dispute->description, 'resolutionNote' => $dispute->resolution_note,
             'canSettle' => $dispute->status === 'open' && $deal->settlementReady() && $deal->hasBothConfirmations(),
+            'pendingInstructionReview' => $deal->pendingInstructionChange !== null,
             'confirmations' => $deal->confirmations->map(fn (SettlementConfirmation $confirmation): array => [
                 'side' => $confirmation->bank_id === $deal->borrower_bank_id ? 'borrower' : 'lender', 'status' => $confirmation->status,
                 'reference' => $confirmation->reference, 'note' => $confirmation->note, 'settlementAt' => $confirmation->settlement_at->toIso8601String(),

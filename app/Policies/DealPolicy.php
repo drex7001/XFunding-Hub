@@ -23,7 +23,7 @@ class DealPolicy
     public function viewSettlement(User $user, Deal $deal): bool
     {
         return $this->view($user, $deal)->allowed() && ($user->hasBankRole(BankRole::Maker) || $user->hasBankRole(BankRole::Approver))
-            && $deal->banksEligible() && $deal->hasApprovedInstructions() && $deal->hasVerifiedFee()
+            && $deal->banksEligible() && $deal->recordedInstructionsRemainValid() && $deal->hasVerifiedFee()
             && $deal->pendingInstructionChange === null;
     }
 }

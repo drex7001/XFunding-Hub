@@ -1,0 +1,1 @@
+@include('errors.page', ['code' => 403, 'heading' => 'You cannot do this', 'text' => $exception->getMessage() && $exception->getMessage() !== 'This action is unauthorized.' ? $exception->getMessage() : 'Your current role or institution status does not allow this action.'])

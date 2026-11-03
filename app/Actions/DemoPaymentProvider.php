@@ -14,6 +14,15 @@ class DemoPaymentProvider
             && (bool) config('payments.demo_enabled') && is_string($secret) && strlen($secret) >= 32;
     }
 
+    /**
+     * Payment proof already recorded stays valid when new demo payments are switched off,
+     * but a demo receipt never counts as proof outside local and test environments.
+     */
+    public function honorsRecordedProof(): bool
+    {
+        return app()->environment(['local', 'testing']);
+    }
+
     public function assertEnabled(): void
     {
         abort_unless($this->enabled(), 404);

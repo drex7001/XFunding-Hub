@@ -8,4 +8,5 @@ return [
     'max_document_kilobytes' => 10240,
     'collateral_types' => ['unsecured', 'sovereign_bonds'],
     'interest_payments' => ['at_maturity', 'monthly'],
+    'minimum_fee_window_minutes' => 60,
 ];

@@ -35,7 +35,7 @@ class ManageSettlementConfirmations
             ]);
             $this->activity->handle($actor, $current, 'confirmation.proposed', $bankId);
 
-            return $record->setRelation('deal', $current);
+            return $record->refresh()->setRelation('deal', $current);
         });
     }
 

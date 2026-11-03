@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\DescribeWorkflowProgress;
 use App\Actions\ManageOffers;
 use App\Http\Requests\StoreOfferRequest;
 use App\Http\Resources\OfferResource;
@@ -42,14 +43,18 @@ class OfferController extends Controller
     public function store(StoreOfferRequest $request, FundingRequest $fundingRequest, ManageOffers $action): RedirectResponse|JsonResponse
     {
         $record = $action->create($request->user(), $fundingRequest, $request->validated());
+        $submitted = $request->boolean('submit_for_approval');
+        if ($submitted) {
+            $record = $action->submit($request->user(), $record);
+        }
         if ($this->json($request)) {
             return (new OfferResource($record))->response()->setStatusCode(201);
         }
 
-        return redirect()->route('offers.show', $record)->with('status', 'Offer draft created. Submit it for independent lender approval.');
+        return redirect()->route('offers.show', $record)->with('status', $submitted ? 'Offer sent for independent lender approval.' : 'Offer draft saved. Send it for independent lender approval when ready.');
     }
 
-    public function show(Request $request, Offer $offer): View|OfferResource
+    public function show(Request $request, Offer $offer, DescribeWorkflowProgress $progress): View|OfferResource
     {
         Gate::authorize('view', $offer);
         $offer->load(['bank', 'fundingRequest.bank', 'fundingRequest.deal', 'settlementInstruction.bank', 'pendingApproval']);
@@ -57,7 +62,7 @@ class OfferController extends Controller
             return new OfferResource($offer);
         }
 
-        return view('offers.show', ['record' => $offer, 'data' => (new OfferResource($offer))->resolve($request), 'history' => OfferApproval::query()->where('offer_id', $offer->id)->latest()->limit(10)->get()]);
+        return view('offers.show', ['record' => $offer, 'data' => (new OfferResource($offer))->resolve($request), 'progress' => $progress->offer($offer), 'history' => OfferApproval::query()->where('offer_id', $offer->id)->latest()->limit(10)->get()]);
     }
 
     public function edit(Request $request, Offer $offer): View
@@ -70,7 +75,13 @@ class OfferController extends Controller
 
     public function update(StoreOfferRequest $request, Offer $offer, ManageOffers $action): RedirectResponse|OfferResource
     {
-        return $this->respond($request, $action->update($request->user(), $offer, $request->validated()), 'Offer updated. Submit a fresh approval of the new terms.');
+        $record = $action->update($request->user(), $offer, $request->validated());
+        $submitted = $request->boolean('submit_for_approval');
+        if ($submitted) {
+            $record = $action->submit($request->user(), $record);
+        }
+
+        return $this->respond($request, $record, $submitted ? 'Offer updated and sent for independent lender approval.' : 'Offer updated. Send it for a fresh approval of the new terms.');
     }
 
     public function submit(Request $request, Offer $offer, ManageOffers $action): RedirectResponse|OfferResource

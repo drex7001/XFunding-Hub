@@ -112,3 +112,7 @@ it('resets a password and revokes previous sessions', function () {
     expect($user->fresh()->auth_version)->toBe(1);
     $this->assertDatabaseHas('audit_events', ['actor_id' => $user->id, 'action' => 'account.password_reset']);
 });
+
+it('rejects a login with an array email as invalid input rather than a server error', function () {
+    $this->post('/login', ['email' => ['someone@example.test'], 'password' => 'whatever'])->assertSessionHasErrors('email');
+});

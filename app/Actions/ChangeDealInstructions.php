@@ -23,11 +23,12 @@ class ChangeDealInstructions
 
         return $this->lock->handle($actor, $deal, function (Deal $current) use ($actor, $instructionId): DealInstructionChange {
             Gate::forUser($actor)->authorize('create', [DealInstructionChange::class, $current]);
-            $this->ensureChangeable($current);
+            $side = $current->sideOf($actor->membership->bank_id);
+            $this->ensureChangeable($current, $side);
             abort_unless($current->pendingInstructionChange === null, 409, 'Resolve the pending instruction change first.');
-            abort_unless($instructionId !== $current->settlement_instruction_id, 409, 'Choose a different approved instruction version.');
-            $instruction = $this->approvedInstruction($current, $instructionId);
-            $change = DealInstructionChange::create(['deal_id' => $current->id, 'settlement_instruction_id' => $instruction->id, 'proposed_by' => $actor->id, 'pending_slot' => $current->id]);
+            abort_unless($instructionId !== $current->currentInstructionIdFor($side), 409, 'Choose a different approved instruction version.');
+            $instruction = $this->approvedInstruction($actor->membership->bank_id, $instructionId);
+            $change = DealInstructionChange::create(['deal_id' => $current->id, 'settlement_instruction_id' => $instruction->id, 'side' => $side, 'proposed_by' => $actor->id, 'pending_slot' => $current->id]);
             $this->audit->handle($actor, 'deal.instruction_change_proposed', $instruction, ['deal_id' => $current->id]);
 
             return $change->refresh();
@@ -44,10 +45,15 @@ class ChangeDealInstructions
             Gate::forUser($actor)->authorize('review', $current);
             abort_unless($current->status === 'pending', 409, 'This instruction change is no longer pending.');
             if ($approve) {
-                $this->ensureChangeable($deal);
-                $instruction = $this->approvedInstruction($deal, $current->settlement_instruction_id);
-                $current->forceFill(['previous_snapshot' => $deal->instruction_snapshot]);
-                $deal->forceFill(['settlement_instruction_id' => $instruction->id, 'instruction_snapshot' => ['bank' => $instruction->bank_profile, 'details' => $instruction->details, 'version' => $instruction->version], 'instructions_updated_at' => now()])->save();
+                $this->ensureChangeable($deal, $current->side);
+                $isBorrower = $current->side === 'borrower';
+                $instruction = $this->approvedInstruction($isBorrower ? $deal->borrower_bank_id : $deal->lender_bank_id, $current->settlement_instruction_id);
+                $current->forceFill(['previous_snapshot' => $isBorrower ? $deal->borrower_instruction_snapshot : $deal->instruction_snapshot]);
+                $deal->forceFill([
+                    ($isBorrower ? 'borrower_settlement_instruction_id' : 'settlement_instruction_id') => $instruction->id,
+                    ($isBorrower ? 'borrower_instruction_snapshot' : 'instruction_snapshot') => $instruction->snapshot(),
+                    'instructions_updated_at' => now(),
+                ])->save();
                 if ($deal->status === DealStatus::Disputed) {
                     $deal->confirmations()->whereIn('status', ['pending', 'approved'])->update(['status' => 'superseded', 'pending_slot' => null, 'approved_slot' => null, 'updated_at' => now()]);
                     $this->activity->handle($actor, $deal, 'confirmations.superseded');
@@ -61,15 +67,15 @@ class ChangeDealInstructions
         });
     }
 
-    private function ensureChangeable(Deal $deal): void
+    private function ensureChangeable(Deal $deal, string $side): void
     {
-        abort_unless(($deal->currentStatus() === DealStatus::AwaitingFee || ($deal->status === DealStatus::Disputed && $deal->activeDispute !== null && $deal->hasVerifiedFee())) && $deal->banksEligible(), 409, 'Instructions require a fee-pending reservation or an open dispute with verified payment, while both institutions remain eligible.');
+        abort_unless($deal->acceptsInstructionChangeFrom($side) && $deal->banksEligible(), 409, 'Instructions require a fee-pending reservation or an open dispute with verified payment, while both institutions remain eligible.');
         abort_if($deal->feePayments()->where('status', FeePaymentStatus::Pending)->exists() || $deal->receipts()->where('payment_receipts.status', PaymentReceiptStatus::RefundReview)->exists(), 409, 'Resolve pending payments or refunds before changing instructions.');
     }
 
-    private function approvedInstruction(Deal $deal, string $id): SettlementInstruction
+    private function approvedInstruction(int $bankId, string $id): SettlementInstruction
     {
-        $instruction = SettlementInstruction::query()->where('bank_id', $deal->lender_bank_id)->where('status', 'approved')->with('bank')->find($id);
+        $instruction = SettlementInstruction::query()->where('bank_id', $bankId)->where('status', 'approved')->with('bank')->find($id);
         if ($instruction === null || ! $instruction->matchesBankProfile()) {
             throw ValidationException::withMessages(['settlement_instruction_id' => 'Choose a current independently approved instruction version for your institution.']);
         }

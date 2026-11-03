@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\ManageDealDisputes;
 use App\Actions\ManageFeePayments;
 use App\BankRole;
 use App\BankStatus;
@@ -132,4 +133,34 @@ it('keeps the deal list scoped to participants and its query count bounded', fun
     DB::disableQueryLog();
 
     expect($expanded)->toBeLessThanOrEqual($initial + 2);
+});
+
+it('records a lender disclosure read in the lender audit history', function () {
+    $deal = unlockedDeal();
+    signInUser(bankStaff(BankRole::Maker, $deal->lenderBank));
+    $this->getJson(route('api.deals.settlement', $deal))->assertOk();
+
+    $this->assertDatabaseHas('audit_events', ['action' => 'deal.settlement_details_viewed', 'bank_id' => $deal->lender_bank_id]);
+    $this->assertDatabaseMissing('audit_events', ['action' => 'deal.settlement_details_viewed', 'bank_id' => $deal->borrower_bank_id]);
+});
+
+it('keeps recorded payment proof when new demo payments are switched off', function () {
+    $deal = unlockedDeal();
+    $dispute = app(ManageDealDisputes::class)->open(bankStaff(BankRole::Approver, $deal->borrowerBank), $deal, 'Synthetic discrepancy pending investigation.');
+    config(['payments.demo_enabled' => false]);
+    signInUser(bankStaff(BankRole::Maker, $deal->borrowerBank));
+
+    $this->getJson(route('api.deals.show', $deal))->assertOk()->assertJsonPath('data.identityUnlocked', true);
+    $this->getJson(route('api.deals.settlement', $deal))->assertOk();
+    signInUser(User::factory()->platformAdmin()->create());
+    $this->postJson(route('disputes.resolve', $dispute), ['outcome' => 'closed_unsettled', 'reason' => 'Neither institution could confirm.'])->assertOk();
+});
+
+it('never honours a demo payment receipt as proof in production', function () {
+    $deal = unlockedDeal();
+    expect($deal->hasVerifiedFee())->toBeTrue();
+
+    $this->app->detectEnvironment(fn (): string => 'production');
+
+    expect($deal->fresh()->hasVerifiedFee())->toBeFalse();
 });

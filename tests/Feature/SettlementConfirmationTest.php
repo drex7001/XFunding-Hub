@@ -174,3 +174,10 @@ it('does not accept confirmation IDs attached to another deal', function () {
     signInUser(bankStaff(BankRole::Approver, $deal->borrowerBank));
     $this->postJson(route('api.confirmations.review', [$deal, $record]), ['decision' => 'approve'])->assertNotFound();
 });
+
+it('returns the stored pending status when an attestation is proposed through the API', function () {
+    $deal = unlockedDeal();
+    signInUser(bankStaff(BankRole::Maker, $deal->borrowerBank));
+
+    $this->postJson(route('api.confirmations.store', $deal), settlementPayload())->assertCreated()->assertJsonPath('data.status', 'pending')->assertJsonPath('data.canReview', false);
+});

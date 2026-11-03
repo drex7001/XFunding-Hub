@@ -17,6 +17,15 @@ class BankPolicy
         return $allowed ? Response::allow() : Response::denyAsNotFound();
     }
 
+    public function viewAudit(User $user, Bank $bank): bool
+    {
+        if ($user->active && $user->is_platform_admin) {
+            return true;
+        }
+
+        return $user->hasBankRole(BankRole::Admin, $bank) || $user->hasBankRole(BankRole::Auditor, $bank);
+    }
+
     public function create(User $user): bool
     {
         return $user->active && $user->is_platform_admin;

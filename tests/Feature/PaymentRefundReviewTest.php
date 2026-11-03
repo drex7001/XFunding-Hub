@@ -102,6 +102,6 @@ it('renders the operations exception screens and escapes refund notes', function
     $receipt->forceFill(['status' => PaymentReceiptStatus::Refunded, 'refund_reference' => $dangerous, 'review_reason' => $dangerous])->save();
     signInUser(User::factory()->platformAdmin()->create());
 
-    $this->get(route('payments.operations'))->assertOk()->assertSee('Review payment exceptions.');
+    $this->get(route('payments.operations'))->assertOk()->assertSee('Payment exceptions');
     $this->post(route('payments.receipts.review', $receipt), ['reason' => 'Rechecking the recorded refund evidence.'])->assertOk()->assertSee(e($dangerous), false)->assertDontSee($dangerous, false);
 });

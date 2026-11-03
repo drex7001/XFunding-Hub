@@ -87,6 +87,11 @@ function marketOffer(User $maker, FundingRequest $request, array $overrides = []
     ], $overrides));
 }
 
+function receivingInstructionId(FundingRequest $request): string
+{
+    return SettlementInstruction::factory()->approved()->create(['bank_id' => $request->bank_id])->id;
+}
+
 function enableDemoPayments(): void
 {
     config(['payments.demo_enabled' => true, 'payments.driver' => 'demo', 'payments.webhook_secret' => str_repeat('test-webhook-key-', 4)]);
@@ -120,6 +125,16 @@ function signedPaymentNotification(array $payload, array $headers = []): TestRes
     ], $headers);
 
     return test()->call('POST', route('payments.demo.notify'), [], [], [], $server, $body);
+}
+
+/**
+ * Renames the borrower and re-records its receiving version so it still matches the bank profile.
+ */
+function renameBorrowerBank(Deal $deal, string $name): void
+{
+    $deal->borrowerBank->update(['name' => $name]);
+    $deal->borrowerInstruction->update(['bank_profile' => SettlementInstruction::profileOf($deal->borrowerBank->fresh())]);
+    $deal->update(['borrower_instruction_snapshot' => $deal->borrowerInstruction->fresh()->snapshot()]);
 }
 
 function feePaymentAttempt(): FeePayment

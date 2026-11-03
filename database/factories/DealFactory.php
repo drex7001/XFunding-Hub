@@ -30,6 +30,8 @@ class DealFactory extends Factory
 
                 return ['bank' => $instruction->bank_profile, 'details' => $instruction->details, 'version' => $instruction->version];
             },
+            'borrower_settlement_instruction_id' => fn (array $a): string => SettlementInstruction::factory()->approved()->create(['bank_id' => $a['borrower_bank_id']])->id,
+            'borrower_instruction_snapshot' => fn (array $a): array => SettlementInstruction::query()->findOrFail($a['borrower_settlement_instruction_id'])->snapshot(),
             'offer_valid_until' => now()->addDays(3), 'status' => 'awaiting_fee',
         ];
     }

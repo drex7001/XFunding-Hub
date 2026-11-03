@@ -11,12 +11,12 @@ class SettlementInstructionPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->canBrowseMarketplace();
+        return $user->canManageSettlementInstructions();
     }
 
     public function create(User $user): bool
     {
-        return $user->canBrowseMarketplace() && $user->hasBankRole(BankRole::Maker);
+        return $user->canManageSettlementInstructions() && $user->hasBankRole(BankRole::Maker);
     }
 
     public function view(User $user, SettlementInstruction $instruction): Response
@@ -27,5 +27,10 @@ class SettlementInstructionPolicy
     public function review(User $user, SettlementInstruction $instruction): bool
     {
         return $this->view($user, $instruction)->allowed() && $user->hasBankRole(BankRole::Approver) && $instruction->created_by !== $user->id;
+    }
+
+    public function retire(User $user, SettlementInstruction $instruction): bool
+    {
+        return $this->view($user, $instruction)->allowed() && $user->hasBankRole(BankRole::Approver);
     }
 }

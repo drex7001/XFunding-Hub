@@ -69,13 +69,23 @@ it('completes a two-lender request through verified fee and both bank attestatio
             ->not->toContain('SECRETDEMOACCOUNT'.$index)->not->toContain($offers[$index]->id);
     }
     $token = $comparison->json('data.offers.'.$winnerIndex.'.token');
-    $selectionId = $this->postJson(route('api.selection.store', $request), ['offer_token' => $token])->assertCreated()->json('data.id');
+    $receivingId = $this->postJson(route('api.instructions.store'), instructionPayload([
+        'account_number' => 'BORROWERRECEIVINGACCOUNT', 'contact_email' => 'borrower-desk@synthetic.example',
+    ]))->assertCreated()->json('data.id');
+    signInUser($borrowerApprover);
+    $this->postJson(route('api.instructions.review', $receivingId), ['decision' => 'approve'])->assertOk();
+    signInUser($borrowerMaker);
+    $selectionId = $this->postJson(route('api.selection.store', $request), ['offer_token' => $token, 'settlement_instruction_id' => $receivingId])->assertCreated()->json('data.id');
     signInUser($borrowerApprover);
     $selection = $this->postJson(route('api.selection.review', [$request, $selectionId]), ['decision' => 'approve'])
         ->assertOk()->assertJsonPath('data.status', 'awaiting_fee')->assertJsonPath('data.fee.amount', '250000.00');
     $deal = Deal::query()->findOrFail($selection->json('data.id'));
     $this->getJson(route('api.deals.settlement', $deal))->assertForbidden();
     expect($offers[1 - $winnerIndex]->fresh()->status)->toBe(OfferStatus::Unsuccessful);
+    signInUser($lenders[$winnerIndex]);
+    expect($this->getJson(route('api.deals.show', $deal))->assertOk()->getContent())->not->toContain('BORROWERRECEIVINGACCOUNT');
+    $this->getJson(route('api.deals.settlement', $deal))->assertForbidden();
+    signInUser($borrowerApprover);
 
     $firstPaymentId = $this->postJson(route('api.payments.store', $deal))->assertCreated()->json('data.id');
     $firstPayment = FeePayment::query()->findOrFail($firstPaymentId);
@@ -96,6 +106,10 @@ it('completes a two-lender request through verified fee and both bank attestatio
     signedPaymentNotification($payload)->assertOk()->assertJsonPath('result', 'duplicate');
     $this->getJson(route('api.deals.settlement', $deal))->assertOk()
         ->assertJsonPath('data.instructions.accountNumber', 'SECRETDEMOACCOUNT'.$winnerIndex);
+    signInUser($lenders[$winnerIndex]);
+    $this->getJson(route('api.deals.settlement', $deal))->assertOk()
+        ->assertJsonPath('data.borrowerInstructions.accountNumber', 'BORROWERRECEIVINGACCOUNT');
+    signInUser($borrowerApprover);
     $ordinary = $this->getJson(route('api.deals.show', $deal))->assertOk()->assertJsonPath('data.status', 'unlocked');
     expect($ordinary->getContent())->not->toContain('SECRETDEMOACCOUNT')->not->toContain($lenders[$winnerIndex]->membership->bank->name);
     signInUser($lenders[1 - $winnerIndex]);

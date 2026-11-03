@@ -1,6 +1,9 @@
 <?php
 
 use App\BankRole;
+use App\Models\DealInstructionChange;
+use App\Models\FundingRequest;
+use App\Models\SelectionProposal;
 use App\Models\SettlementInstruction;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -124,4 +127,49 @@ it('accepts an alphanumeric BIC party prefix with an alphabetic country and opti
     signInUser(bankStaff());
 
     $this->postJson(route('api.instructions.store'), instructionPayload(['bic' => 'A1B2LK33XXX']))->assertCreated()->assertJsonPath('data.details.bic', 'A1B2LK33XXX');
+});
+
+it('lets an approver retire an unused version so new work cannot attach it', function () {
+    $maker = bankStaff();
+    $approver = bankStaff(BankRole::Approver, $maker->membership->bank);
+    $request = FundingRequest::factory()->published()->create();
+    $instruction = SettlementInstruction::factory()->approved()->create(['bank_id' => $maker->membership->bank_id]);
+    signInUser($maker);
+    $this->postJson(route('api.instructions.retire', $instruction), ['reason' => 'Account closed.'])->assertForbidden();
+
+    signInUser($approver);
+    $this->postJson(route('api.instructions.retire', $instruction), ['reason' => 'Account closed.'])->assertOk()->assertJsonPath('data.status', 'retired')->assertJsonPath('data.canRetire', false);
+    $this->postJson(route('api.instructions.retire', $instruction), ['reason' => 'Account closed.'])->assertConflict();
+    $this->assertDatabaseHas('audit_events', ['action' => 'instructions.retired', 'bank_id' => $maker->membership->bank_id]);
+
+    signInUser($maker);
+    $this->postJson(route('api.offers.store', $request), offerPayload($instruction, $request))->assertUnprocessable()->assertJsonValidationErrors('settlement_instruction_id');
+});
+
+it('refuses to retire a version that open work still uses', function (string $case) {
+    enableDemoPayments();
+    $deal = paymentDeal(bankStaff());
+    $instruction = match ($case) {
+        'open deal' => $deal->settlementInstruction,
+        'borrower side of an open deal' => $deal->borrowerInstruction,
+        'active offer' => marketOffer(bankStaff(), FundingRequest::factory()->published()->create())->settlementInstruction,
+        'pending selection' => SelectionProposal::factory()->create()->borrowerInstruction,
+        'pending deal change' => DealInstructionChange::factory()->create(['deal_id' => $deal->id])->settlementInstruction,
+    };
+
+    signInUser(bankStaff(BankRole::Approver, $instruction->bank));
+    $this->postJson(route('api.instructions.retire', $instruction), ['reason' => 'Account closed.'])->assertConflict();
+    expect($instruction->fresh()->status)->toBe('approved');
+})->with(['open deal', 'borrower side of an open deal', 'active offer', 'pending selection', 'pending deal change']);
+
+it('keeps settlement disclosure on a closed deal after its version is retired', function () {
+    enableDemoPayments();
+    $deal = unlockedDeal();
+    confirmedInstitution($deal, $deal->borrowerBank);
+    confirmedInstitution($deal->fresh(), $deal->lenderBank);
+    $approver = bankStaff(BankRole::Approver, $deal->lenderBank);
+    signInUser($approver);
+
+    $this->postJson(route('api.instructions.retire', $deal->settlementInstruction), ['reason' => 'Account closed after settlement.'])->assertOk();
+    $this->getJson(route('api.deals.settlement', $deal))->assertOk()->assertJsonPath('data.instructions.accountNumber', 'DEMO000012345678');
 });

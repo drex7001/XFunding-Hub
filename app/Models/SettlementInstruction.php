@@ -19,7 +19,7 @@ class SettlementInstruction extends Model
 
     protected function casts(): array
     {
-        return ['details' => 'encrypted:array', 'bank_profile' => 'array', 'version' => 'integer', 'reviewed_at' => 'immutable_datetime'];
+        return ['details' => 'encrypted:array', 'bank_profile' => 'array', 'version' => 'integer', 'reviewed_at' => 'immutable_datetime', 'retired_at' => 'immutable_datetime'];
     }
 
     public function bank(): BelongsTo
@@ -35,6 +35,12 @@ class SettlementInstruction extends Model
         ksort($current);
 
         return $expected === $current;
+    }
+
+    /** @return array{bank: array<string, string>, details: array<string, string>, version: int} */
+    public function snapshot(): array
+    {
+        return ['bank' => $this->bank_profile, 'details' => $this->details, 'version' => $this->version];
     }
 
     /** @return array<string, string> */

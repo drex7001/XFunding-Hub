@@ -18,6 +18,16 @@ class RecordDealActivity
         $side = $bankId === null ? null : ($bankId === $deal->borrower_bank_id ? 'borrower' : 'lender');
         $event = DealEvent::create(['deal_id' => $deal->id, 'kind' => $kind, 'side' => $side]);
         $this->audit->handle($actor, 'deal.'.$kind, $deal, ['deal_id' => $deal->id, 'side' => $side]);
+        $this->notify($actor, $deal, $kind, $side, $bankId);
+
+        return $event;
+    }
+
+    /**
+     * Selection and fee milestones notify staff without adding a settlement timeline event.
+     */
+    public function notify(?User $actor, Deal $deal, string $kind, ?string $side = null, ?int $bankId = null): void
+    {
         $roles = $kind === 'confirmation.proposed' ? [BankRole::Approver->value]
             : ($kind === 'confirmation.rejected' ? [BankRole::Maker->value] : array_column(BankRole::cases(), 'value'));
         $banks = in_array($kind, ['confirmation.proposed', 'confirmation.rejected'], true)
@@ -31,8 +41,6 @@ class RecordDealActivity
                 $recipient->notify(new DealActivityNotification($deal->id, $recipient->membership->bank_id, $kind, $side, $roles));
             }
         }
-
-        return $event;
     }
 
     public static function label(string $kind, ?string $side = null): string

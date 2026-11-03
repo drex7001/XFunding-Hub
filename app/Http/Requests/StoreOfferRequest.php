@@ -37,6 +37,7 @@ class StoreOfferRequest extends FormRequest
             'interest_payment' => ['required', Rule::in(config('marketplace.interest_payments'))],
             'valid_until' => ['required', 'date', 'after:now'],
             'settlement_instruction_id' => ['required', 'ulid'],
+            'submit_for_approval' => ['sometimes', 'boolean'],
             'bank_id' => ['prohibited'], 'created_by' => ['prohibited'], 'status' => ['prohibited'],
             'funding_request_id' => ['prohibited'], 'rate_units' => ['prohibited'], 'version' => ['prohibited'],
             'borrower_token' => ['prohibited'], 'label_number' => ['prohibited'], 'active_slot' => ['prohibited'],

@@ -1,21 +1,62 @@
 <x-layout title="Dispute review">
-    <a class="small-link" href="{{ route('disputes.operations') }}">← Settlement disputes</a>
-    <div class="page-heading"><div><span class="eyebrow">AUDITED ACCESS</span><h1>Review settlement evidence.</h1><p class="muted">Deal {{ $data['dealId'] }}</p></div><span class="badge disputed">{{ ucwords(str_replace('_', ' ', $data['status'])) }}</span></div>
-    <section class="panel"><h2>Reported issue</h2><p>{{ $data['description'] }}</p>
-        @if ($data['resolutionNote'])<p>{{ $data['resolutionNote'] }}</p>@endif
-    </section>
-    <section class="panel"><h2>Institution attestations</h2>
-        @forelse ($data['confirmations'] as $confirmation)
-            <div class="review-row"><div><strong>{{ ucfirst($confirmation['side']) }} · {{ ucfirst($confirmation['status']) }}</strong><small>{{ $confirmation['settlementAt'] }} · {{ $confirmation['currentVersion'] ? 'Current instructions' : 'Previous instructions' }}</small><p>{{ $confirmation['reference'] }}</p><p>{{ $confirmation['note'] }}</p></div></div>
-        @empty<p class="muted">Neither institution has supplied a confirmation.</p>@endforelse
-        <p class="muted">Bank attestations are not independent transfer verification. Both current approved confirmations are required for a settled outcome.</p>
-    </section>
+    <x-page-header
+        title="Review settlement evidence"
+        :back="route('disputes.operations')"
+        back-label="Settlement disputes"
+        :status="$data['status'] === 'open' ? 'disputed' : $data['status']"
+        :status-label="ucfirst(str_replace('_', ' ', $data['status']))"
+        :meta="'Deal '.strtoupper(substr($data['dealId'], -8)).' · This access is audited'"
+    />
+
     @if ($data['status'] === 'open')
-        <section class="panel"><h2>Record resolution</h2><form method="post" action="{{ route('disputes.resolve', $record) }}">
-            @csrf
-            <label for="resolution-reason">Resolution reason and evidence summary</label><textarea id="resolution-reason" name="reason" required minlength="10" maxlength="2000" rows="3"></textarea>
-            @if ($data['canSettle'])<button class="button" name="outcome" value="settled">Resolve as settled</button>
-            @else<button class="button secondary" name="outcome" value="closed_unsettled">Close without confirmed settlement</button>@endif
-        </form></section>
+        <x-next-step :title="$data['canSettle'] ? 'Record the settled outcome' : 'Record the closing outcome'">
+            @unless ($data['canSettle'])
+                <p>A settled outcome requires both current approved confirmations from eligible institutions, with no instruction review pending.@if ($data['pendingInstructionReview']) Closing supersedes the pending instruction review.@endif</p>
+            @endunless
+            <form method="post" action="{{ route('disputes.resolve', $record) }}">
+                @csrf
+                <label for="resolution-reason">Resolution reason and evidence summary</label>
+                <textarea id="resolution-reason" name="reason" required minlength="10" maxlength="2000" rows="3"></textarea>
+                <div class="btn-row">
+                    @if ($data['canSettle'])
+                        <button class="btn btn--primary" name="outcome" value="settled">Resolve as settled</button>
+                    @else
+                        <button class="btn btn--danger" name="outcome" value="closed_unsettled">Close without confirmed settlement</button>
+                    @endif
+                </div>
+            </form>
+        </x-next-step>
     @endif
+
+    <div class="grid-even">
+        <section class="panel">
+            <h2>Reported issue</h2>
+            <p class="long-text">{{ $data['description'] }}</p>
+            @if ($data['resolutionNote'])
+                <h3 class="subhead">Resolution</h3>
+                <p class="long-text">{{ $data['resolutionNote'] }}</p>
+            @endif
+        </section>
+        <section class="panel">
+            <h2>Institution attestations</h2>
+            @forelse ($data['confirmations'] as $confirmation)
+                <div class="row">
+                    <div class="row__text">
+                        <strong>{{ ucfirst($confirmation['side']) }}</strong>
+                        <small><x-when :at="$confirmation['settlementAt']" /> · {{ $confirmation['currentVersion'] ? 'Current instructions' : 'Previous instructions' }}</small>
+                        @if ($confirmation['reference'])
+                            <small>{{ $confirmation['reference'] }}</small>
+                        @endif
+                        @if ($confirmation['note'])
+                            <small>{{ $confirmation['note'] }}</small>
+                        @endif
+                    </div>
+                    <x-status :value="$confirmation['status']" />
+                </div>
+            @empty
+                <p class="empty-line">Neither institution has supplied a confirmation.</p>
+            @endforelse
+            <p class="muted">Bank attestations are not independent transfer verification.</p>
+        </section>
+    </div>
 </x-layout>

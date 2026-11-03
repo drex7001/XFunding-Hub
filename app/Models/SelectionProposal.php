@@ -10,8 +10,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['funding_request_id', 'offer_id', 'proposed_by', 'expected_offer_version', 'pending_slot'])]
-#[Hidden(['offer_id'])]
+#[Fillable(['funding_request_id', 'offer_id', 'proposed_by', 'expected_offer_version', 'borrower_settlement_instruction_id', 'pending_slot'])]
+#[Hidden(['offer_id', 'borrower_settlement_instruction_id'])]
 class SelectionProposal extends Model
 {
     /** @use HasFactory<SelectionProposalFactory> */
@@ -25,6 +25,11 @@ class SelectionProposal extends Model
     public function offer(): BelongsTo
     {
         return $this->belongsTo(Offer::class);
+    }
+
+    public function borrowerInstruction(): BelongsTo
+    {
+        return $this->belongsTo(SettlementInstruction::class, 'borrower_settlement_instruction_id');
     }
 
     public function fundingRequest(): BelongsTo

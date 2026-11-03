@@ -15,7 +15,7 @@ class CopySqliteDemoToPostgres
 
     private const ENCRYPTED = [
         'settlement_instructions' => ['details'],
-        'deals' => ['instruction_snapshot'],
+        'deals' => ['instruction_snapshot', 'borrower_instruction_snapshot'],
         'deal_instruction_changes' => ['previous_snapshot'],
         'settlement_confirmations' => ['reference', 'note', 'review_reason'],
         'deal_disputes' => ['description', 'resolution_note'],

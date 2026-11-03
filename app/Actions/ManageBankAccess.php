@@ -38,21 +38,37 @@ class ManageBankAccess
     /** @param array<string, mixed> $data */
     public function propose(User $actor, Bank $bank, array $data, ?BankMembership $membership = null): AccessRequest
     {
-        return DB::transaction(function () use ($actor, $bank, $data, $membership): AccessRequest {
+        return $this->recordProposal($actor, $bank, $data, $membership, $membership ? 'role_change' : 'invitation');
+    }
+
+    /**
+     * Restoring a revoked colleague follows the same independent approval as any role change.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function proposeReinstatement(User $actor, Bank $bank, array $data, BankMembership $membership): AccessRequest
+    {
+        return $this->recordProposal($actor, $bank, $data, $membership, 'reinstatement');
+    }
+
+    /** @param array<string, mixed> $data */
+    private function recordProposal(User $actor, Bank $bank, array $data, ?BankMembership $membership, string $kind): AccessRequest
+    {
+        return DB::transaction(function () use ($actor, $bank, $data, $membership, $kind): AccessRequest {
             Bank::query()->lockForUpdate()->findOrFail($bank->id);
             $actor->refresh()->load('membership.bank');
             Gate::forUser($actor)->authorize('manageMembers', $bank);
             if ($membership !== null) {
                 $membership->refresh();
                 abort_unless($membership->bank_id === $bank->id, 404);
-                abort_unless($membership->active, 409, 'This membership is inactive.');
+                abort_unless($membership->active === ($kind === 'role_change'), 409, $kind === 'role_change' ? 'This membership is inactive.' : 'This membership is already active.');
             }
             $roles = $data['roles'];
             sort($roles);
             $request = AccessRequest::create([
                 'bank_id' => $bank->id, 'requested_by' => $actor->id,
                 'membership_id' => $membership?->id, 'membership_version' => $membership?->version,
-                'kind' => $membership ? 'role_change' : 'invitation',
+                'kind' => $kind,
                 'name' => $membership?->user->name ?? $data['name'],
                 'email' => $membership?->user->email ?? $data['email'], 'roles' => $roles,
             ]);
@@ -76,9 +92,12 @@ class ManageBankAccess
                     $this->issueInvitation($actor, $request->bank, $request->name, $request->email, $request->roles);
                 } else {
                     $membership = $request->membership()->lockForUpdate()->firstOrFail();
-                    abort_unless($membership->active && $membership->version === $request->membership_version, 409, 'Membership changed. Submit a new request.');
-                    $this->protectLastAdmin($membership, $request->roles);
-                    $membership->forceFill(['roles' => $request->roles, 'version' => $membership->version + 1])->save();
+                    $reinstating = $request->kind === 'reinstatement';
+                    abort_unless($membership->active !== $reinstating && $membership->version === $request->membership_version, 409, 'Membership changed. Submit a new request.');
+                    if (! $reinstating) {
+                        $this->protectLastAdmin($membership, $request->roles);
+                    }
+                    $membership->forceFill(['active' => true, 'roles' => $request->roles, 'version' => $membership->version + 1])->save();
                     $membership->user()->increment('auth_version');
                 }
             }

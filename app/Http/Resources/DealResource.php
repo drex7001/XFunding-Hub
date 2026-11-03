@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources;
 
-use App\Actions\DemoPaymentProvider;
 use App\DealStatus;
 use App\Models\DealDispute;
 use App\Models\FeePayment;
@@ -18,13 +17,12 @@ class DealResource extends JsonResource
     /** @return array<string, mixed> */
     public function toArray(Request $request): array
     {
-        $payable = Gate::allows('create', [FeePayment::class, $this->resource]) && app(DemoPaymentProvider::class)->enabled()
-            && $this->currentStatus() === DealStatus::AwaitingFee && $this->hasFeeQuote() && $this->banksEligible()
-            && $this->hasApprovedInstructions() && $this->pendingInstructionChange === null
-            && ! $this->hasPendingPayment() && ! $this->hasPendingRefund();
+        $payable = Gate::allows('create', [FeePayment::class, $this->resource]) && $this->isReadyForPayment();
+        $viewerBankId = $request->user()->membership?->bank_id;
         $data = [
             'id' => $this->id, 'fundingRequestId' => $this->funding_request_id,
-            'status' => $this->currentStatus()->value, 'terms' => $this->terms,
+            'status' => $this->currentStatus()->value,
+            'terms' => ['label' => $this->labelFor($viewerBankId)] + $this->terms,
             'offerValidUntil' => $this->offer_valid_until->toIso8601String(),
             'feeConfigured' => $this->hasFeeQuote(), 'identityUnlocked' => $this->hasVerifiedFee(),
             'fee' => $this->hasFeeQuote() ? [
@@ -41,14 +39,16 @@ class DealResource extends JsonResource
             ],
             'instructionsUpdatedAt' => $this->instructions_updated_at?->toIso8601String(),
             'instructionReviewPending' => $this->pendingInstructionChange !== null,
+            'receivingInstructionsRecorded' => $this->borrower_settlement_instruction_id !== null,
             'can' => ['initiatePayment' => $payable, 'viewSettlement' => Gate::allows('viewSettlement', $this->resource),
                 'proposeConfirmation' => Gate::allows('create', [SettlementConfirmation::class, $this->resource]) && $this->settlementReady()
                     && ! $this->confirmations->contains(fn (SettlementConfirmation $record): bool => $record->bank_id === $request->user()->membership?->bank_id && in_array($record->status, ['pending', 'approved'], true)),
                 'openDispute' => Gate::allows('create', [DealDispute::class, $this->resource]) && $this->status === DealStatus::Unlocked && $this->hasVerifiedFee(),
             ],
         ];
-        if ($request->user()->membership?->bank_id === $this->lender_bank_id && Gate::allows('viewAny', SettlementInstruction::class)) {
-            $change = $this->pendingInstructionChange;
+        $viewerSide = $this->sideOf($viewerBankId);
+        $change = $this->pendingInstructionChange;
+        if ($viewerSide !== null && ($change === null || $change->side === $viewerSide) && Gate::allows('viewAny', SettlementInstruction::class)) {
             $data['instructionChange'] = $change ? ['id' => $change->id, 'version' => $change->settlementInstruction->version, 'canReview' => Gate::allows('review', $change)] : null;
         }
 

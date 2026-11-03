@@ -19,7 +19,7 @@ use Illuminate\Validation\Rule;
 
 class ProcessFeePaymentNotification
 {
-    public function __construct(private DemoPaymentProvider $provider, private WithLockedDeal $lock, private ManageFeePayments $payments, private RecordAuditEvent $audit) {}
+    public function __construct(private DemoPaymentProvider $provider, private WithLockedDeal $lock, private ManageFeePayments $payments, private RecordAuditEvent $audit, private RecordDealActivity $activity) {}
 
     public function handle(Request $request): string
     {
@@ -105,6 +105,7 @@ class ProcessFeePaymentNotification
                     $deal->forceFill(['status' => DealStatus::Unlocked, 'verified_payment_id' => $payment->id, 'unlocked_at' => now()])->save();
                     $this->audit->handle(null, 'fee.payment_verified', $deal->fundingRequest, ['payment_id' => $payment->id, 'receipt_id' => $receipt->id]);
                     $this->audit->handle(null, 'deal.unlocked', $deal->fundingRequest, ['deal_id' => $deal->id]);
+                    $this->activity->notify(null, $deal, 'fee.verified');
                     $outcome = 'verified';
                 } else {
                     $receipt->forceFill(['status' => PaymentReceiptStatus::RefundReview, 'reason' => $reason])->save();
@@ -157,7 +158,7 @@ class ProcessFeePaymentNotification
             ! $deal->hasFeeQuote() || $payment->amount_minor !== $deal->fee_amount_minor || $payment->currency !== $deal->fee_currency => 'fee_quote_mismatch',
             ! $deal->banksEligible() => 'institution_ineligible',
             $deal->pendingInstructionChange !== null => 'instruction_change_pending',
-            ! $deal->hasApprovedInstructions() => 'approved_instructions_changed',
+            ! $deal->recordedInstructionsRemainValid() => 'approved_instructions_changed',
             default => null,
         };
     }

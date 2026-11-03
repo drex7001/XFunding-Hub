@@ -9,6 +9,7 @@ use App\Http\Resources\DealResource;
 use App\Models\FundingRequest;
 use App\Models\Offer;
 use App\Models\SelectionProposal;
+use App\Models\SettlementInstruction;
 use App\OfferStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -25,12 +26,13 @@ class SelectionController extends Controller
         $records = $fundingRequest->offers()->where('status', OfferStatus::Active)->where('valid_until', '>', now())
             ->with(['bank', 'settlementInstruction.bank'])->orderBy('label_number')->get()
             ->filter(fn (Offer $offer): bool => $offer->isSelectable());
-        $pending = $fundingRequest->pendingSelection?->load('offer');
+        $pending = $fundingRequest->pendingSelection?->load(['offer', 'borrowerInstruction']);
         $data = [
             'offers' => AnonymousOfferResource::collection($records->values())->resolve($request),
-            'pendingSelection' => $pending ? ['id' => $pending->id, 'offer' => (new AnonymousOfferResource($pending->offer))->resolve($request), 'canReview' => Gate::allows('review', $pending)] : null,
+            'pendingSelection' => $pending ? ['id' => $pending->id, 'offer' => (new AnonymousOfferResource($pending->offer))->resolve($request), 'receivingInstructionVersion' => $pending->borrowerInstruction?->version, 'canReview' => Gate::allows('review', $pending)] : null,
             'deal' => $fundingRequest->deal ? (new DealResource($fundingRequest->deal))->resolve($request) : null,
             'canPropose' => Gate::allows('create', [SelectionProposal::class, $fundingRequest]) && $fundingRequest->currentStatus() === FundingRequestStatus::Open && $fundingRequest->pendingApproval === null && $pending === null && $fundingRequest->deal === null,
+            'receivingInstructions' => Gate::allows('create', [SelectionProposal::class, $fundingRequest]) ? $this->receivingInstructions($fundingRequest) : [],
         ];
         if ($request->expectsJson() || $request->is('api/*')) {
             return response()->json(['data' => $data]);
@@ -43,8 +45,8 @@ class SelectionController extends Controller
     {
         Gate::authorize('viewAny', [SelectionProposal::class, $fundingRequest]);
         Gate::authorize('create', [SelectionProposal::class, $fundingRequest]);
-        $data = $request->validate(['offer_token' => ['required', 'uuid'], 'offer_id' => ['prohibited'], 'lender_bank_id' => ['prohibited'], 'status' => ['prohibited']]);
-        $proposal = $action->propose($request->user(), $fundingRequest, $data['offer_token']);
+        $data = $request->validate(['offer_token' => ['required', 'uuid'], 'settlement_instruction_id' => ['required', 'ulid'], 'offer_id' => ['prohibited'], 'lender_bank_id' => ['prohibited'], 'status' => ['prohibited']]);
+        $proposal = $action->propose($request->user(), $fundingRequest, $data['offer_token'], $data['settlement_instruction_id']);
 
         return $request->expectsJson() || $request->is('api/*') ? response()->json(['data' => ['id' => $proposal->id, 'status' => 'pending']], 201) : redirect()->route('funding.offers', $fundingRequest)->with('status', 'Selection proposed. An independent borrower approver must review it.');
     }
@@ -60,5 +62,14 @@ class SelectionController extends Controller
         }
 
         return $deal ? redirect()->route('deals.show', $deal)->with('status', 'Selection approved. Lender identity remains locked pending verified platform fee.') : redirect()->route('funding.offers', $fundingRequest)->with('status', 'Selection rejected. A maker can propose another offer.');
+    }
+
+    /** @return array<int, array{id: string, version: int, channel: string}> */
+    private function receivingInstructions(FundingRequest $fundingRequest): array
+    {
+        return SettlementInstruction::query()->where('bank_id', $fundingRequest->bank_id)->where('status', 'approved')->with('bank')->latest('version')->get()
+            ->filter(fn (SettlementInstruction $record): bool => $record->matchesBankProfile())
+            ->map(fn (SettlementInstruction $record): array => ['id' => $record->id, 'version' => $record->version, 'channel' => $record->details['channel']])
+            ->values()->all();
     }
 }

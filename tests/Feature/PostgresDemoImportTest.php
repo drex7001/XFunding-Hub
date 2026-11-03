@@ -24,7 +24,7 @@ function sqliteDemoSource(): array
     DB::setDefaultConnection('sqlite');
     try {
         $deal = unlockedDeal();
-        $deal->borrowerBank->update(['name' => 'Preserved user-edited borrower']);
+        renameBorrowerBank($deal, 'Preserved user-edited borrower');
         confirmedInstitution($deal, $deal->borrowerBank);
         confirmedInstitution($deal->fresh(), $deal->lenderBank);
         $document = financialEvidence($deal->fundingRequest);
@@ -63,6 +63,7 @@ it('preserves encrypted paid history, files, identities and PostgreSQL sequences
     expect($deal->status->value)->toBe('settled');
     expect($deal->hasVerifiedFee())->toBeTrue();
     expect($deal->hasBothConfirmations())->toBeTrue();
+    expect($deal->hasApprovedBorrowerInstructions())->toBeTrue();
     expect(DB::table('deals')->where('id', $deal->id)->value('instruction_snapshot'))->toBe($source['snapshot']);
     expect(hash_file('sha256', $source['path']))->toBe($source['hash']);
     expect(User::factory()->create()->id)->toBeGreaterThan($source['users']);

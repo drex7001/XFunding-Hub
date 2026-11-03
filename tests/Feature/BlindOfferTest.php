@@ -248,8 +248,8 @@ it('renders lender draft create edit and review screens', function () {
     $offer = Offer::factory()->create(['bank_id' => $maker->membership->bank_id, 'created_by' => $maker->id]);
     signInUser($maker);
 
-    $this->get(route('offers.create', $offer->fundingRequest))->assertOk()->assertSee('Prepare a liquidity offer.');
-    $this->get(route('offers.edit', $offer))->assertOk()->assertSee('Refine your offer.');
+    $this->get(route('offers.create', $offer->fundingRequest))->assertOk()->assertSee('Prepare an offer');
+    $this->get(route('offers.edit', $offer))->assertOk()->assertSee('Edit offer');
     $this->get(route('offers.show', $offer))->assertOk()->assertSee('Submit offer for approval');
 });
 

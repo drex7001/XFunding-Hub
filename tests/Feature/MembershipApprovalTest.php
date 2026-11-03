@@ -1,11 +1,13 @@
 <?php
 
+use App\Actions\ManageBankAccess;
 use App\BankRole;
 use App\Models\AccessRequest;
 use App\Models\Bank;
 use App\Models\BankInvitation;
 use App\Models\User;
 use App\Notifications\BankInvitationNotification;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification;
 
@@ -200,4 +202,41 @@ it('escapes invitation names in the email and acceptance page', function () {
     $this->get(route('invitation.show', $token))->assertOk()->assertSee(e($name), false)->assertDontSee($name, false);
 
     expect((string) $mail)->not->toContain($name);
+});
+
+it('reinstates a revoked colleague only through independent approval and revokes old sessions', function () {
+    $bank = Bank::factory()->verified()->create();
+    $proposer = bankStaff(BankRole::Admin, $bank);
+    $reviewer = bankStaff(BankRole::Admin, $bank);
+    $colleague = bankStaff(BankRole::Maker, $bank);
+    $password = 'CorrectHorseBattery1';
+    $colleague->forceFill(['password' => $password])->save();
+    app(ManageBankAccess::class)->revoke($proposer, $colleague->membership);
+    $roles = [BankRole::Approver->value];
+
+    signInUser($proposer->fresh(['membership.bank']));
+    $this->postJson(route('access.store'), ['name' => 'Returning Staff', 'email' => $colleague->email, 'roles' => $roles])->assertUnprocessable();
+    $this->post(route('access.reinstate', $colleague->membership), ['roles' => $roles])->assertRedirect();
+    $request = AccessRequest::query()->where('kind', 'reinstatement')->sole();
+    $this->post(route('access.review', $request), ['decision' => 'approve'])->assertForbidden();
+    expect($colleague->membership->fresh()->active)->toBeFalse();
+
+    $authVersion = $colleague->fresh()->auth_version;
+    signInUser($reviewer->fresh(['membership.bank']));
+    $this->post(route('access.review', $request), ['decision' => 'approve'])->assertRedirect();
+
+    $membership = $colleague->membership->fresh();
+    expect($membership->active)->toBeTrue()->and($membership->roles)->toBe($roles)->and($colleague->fresh()->auth_version)->toBe($authVersion + 1);
+    Auth::logout();
+    $this->post('/login', ['email' => $colleague->email, 'password' => $password])->assertRedirect(route('dashboard'));
+});
+
+it('refuses reinstatement for an active membership or another bank member', function () {
+    $bank = Bank::factory()->verified()->create();
+    $admin = bankStaff(BankRole::Admin, $bank);
+    signInUser($admin);
+    $roles = [BankRole::Maker->value];
+
+    $this->postJson(route('access.reinstate', bankStaff(BankRole::Maker, $bank)->membership), ['roles' => $roles])->assertConflict();
+    $this->postJson(route('access.reinstate', bankStaff(BankRole::Maker)->membership), ['roles' => $roles])->assertNotFound();
 });

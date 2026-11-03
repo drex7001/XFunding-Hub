@@ -6,6 +6,7 @@ use Database\Factories\AuditEventFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable(['bank_id', 'actor_id', 'action', 'subject_type', 'subject_id', 'context'])]
 class AuditEvent extends Model
@@ -16,6 +17,11 @@ class AuditEvent extends Model
     protected function casts(): array
     {
         return ['context' => 'array'];
+    }
+
+    public function actor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'actor_id');
     }
 
     protected static function booted(): void

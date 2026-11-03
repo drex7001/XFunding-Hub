@@ -75,7 +75,7 @@ function raceMarketplaceActions(array $jobs): array
                 } else {
                     $actor = User::query()->findOrFail($job['actor']);
                     $result = match ($job['operation']) {
-                        'selection-proposal' => app(SelectOffer::class)->propose($actor, FundingRequest::query()->findOrFail($job['id']), $job['payload']['token'])->id,
+                        'selection-proposal' => app(SelectOffer::class)->propose($actor, FundingRequest::query()->findOrFail($job['id']), $job['payload']['token'], $job['payload']['instruction'])->id,
                         'selection' => app(SelectOffer::class)->review($actor, SelectionProposal::query()->findOrFail($job['id']), true, null)->id,
                         default => app(ManageSettlementConfirmations::class)->review($actor, SettlementConfirmation::query()->findOrFail($job['id']), true, null)->status->value,
                     };
@@ -103,7 +103,7 @@ it('reserves one winner when independent sessions race the same selection approv
         $maker = bankStaff();
         $request = FundingRequest::factory()->published()->create(['bank_id' => $maker->membership->bank_id]);
         $offer = marketOffer(bankStaff(), $request);
-        $proposal = app(SelectOffer::class)->propose($maker, $request, $offer->borrower_token);
+        $proposal = app(SelectOffer::class)->propose($maker, $request, $offer->borrower_token, receivingInstructionId($request));
         $first = bankStaff(BankRole::Approver, $maker->membership->bank);
         $second = bankStaff(BankRole::Approver, $maker->membership->bank);
         $results = raceMarketplaceActions([
@@ -168,8 +168,8 @@ it('keeps one pending choice when two makers simultaneously propose different le
         $request = FundingRequest::factory()->published()->create(['bank_id' => $maker->membership->bank_id]);
         $offers = [marketOffer(bankStaff(), $request), marketOffer(bankStaff(), $request)];
         $results = raceMarketplaceActions([
-            ['operation' => 'selection-proposal', 'id' => $request->id, 'actor' => $maker->id, 'payload' => ['token' => $offers[0]->borrower_token]],
-            ['operation' => 'selection-proposal', 'id' => $request->id, 'actor' => $otherMaker->id, 'payload' => ['token' => $offers[1]->borrower_token]],
+            ['operation' => 'selection-proposal', 'id' => $request->id, 'actor' => $maker->id, 'payload' => ['token' => $offers[0]->borrower_token, 'instruction' => receivingInstructionId($request)]],
+            ['operation' => 'selection-proposal', 'id' => $request->id, 'actor' => $otherMaker->id, 'payload' => ['token' => $offers[1]->borrower_token, 'instruction' => receivingInstructionId($request)]],
         ]);
         expect(collect($results)->pluck('status')->sort()->values()->all())->toBe([200, 409]);
         expect(SelectionProposal::query()->where('funding_request_id', $request->id)->count())->toBe(1);

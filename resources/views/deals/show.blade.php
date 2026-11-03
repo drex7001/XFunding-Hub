@@ -1,127 +1,312 @@
+@php
+    $status = $data['status'];
+    $can = $data['can'];
+    $terms = $data['terms'];
+    $fee = $data['fee'];
+    $isLender = $side === 'lender';
+    $otherInstitution = $isLender ? 'borrower' : 'lender';
+    $ownChange = $data['instructionChange'] ?? null;
+    $reviewable = collect($confirmations)->first(fn (array $confirmation): bool => $confirmation['canReview']);
+    $ownConfirmation = collect($confirmations)->first(fn (array $confirmation): bool => in_array($confirmation['status'], ['pending', 'approved'], true));
+@endphp
 <x-layout title="Selected deal">
-    <a class="small-link" href="{{ route('deals.index') }}">← Selected deals</a>
-    <div class="page-heading"><div><span class="eyebrow">SELECTED TERMS</span><h1>{{ $data['terms']['label'] }} {{ match ($data['status']) { 'settled' => 'settled', 'disputed' => 'under review', 'cancelled', 'closed_unsettled' => 'closed', default => 'selected' } }}.</h1><p class="muted">{{ $data['terms']['borrower']['name'] }} · Deal {{ $data['id'] }}</p></div><span class="badge {{ $data['status'] }}">{{ ucwords(str_replace('_', ' ', $data['status'])) }}</span></div>
-    <div class="summary-grid"><div class="summary"><span class="eyebrow">SELECTED RATE</span><strong>{{ $data['terms']['rate'] }}%</strong><small>Annual simple rate · {{ $data['terms']['dayCount'] }}</small></div><div class="summary"><span class="eyebrow">REQUIRED LIQUIDITY</span><strong>{{ $data['terms']['currency'] }} {{ $data['terms']['amount'] }}</strong><small>{{ $data['terms']['tenorDays'] }} days</small></div><div class="summary"><span class="eyebrow">OFFER VALID UNTIL</span><strong>{{ $record->offer_valid_until->format('d M Y, H:i') }}</strong><small>UTC</small></div></div>
-    @if ($data['instructionsUpdatedAt'])
-        <div class="notice">Settlement instructions were independently reviewed and updated. Selected financial terms and the platform fee remain fixed.</div>
-    @endif
-    <div class="content-grid"><section class="panel"><h2>Platform fee</h2>
-        @if ($data['fee'])
-            <span class="tag">DEMO PAYMENTS · No real money collected</span><strong class="request-amount">{{ $data['fee']['currency'] }} {{ $data['fee']['amount'] }}</strong><dl><dt>Service fee</dt><dd>{{ $data['fee']['basisPoints'] }} basis points of the principal · {{ $data['fee']['baseAmount'] }}</dd><dt>Demo tax</dt><dd>{{ $data['fee']['taxAmount'] }}</dd><dt>Payment deadline (UTC)</dt><dd>{{ $record->fee_deadline->format('d M Y, H:i') }}</dd></dl>
+    <x-page-header
+        :title="$record->fundingRequest->title"
+        :eyebrow="$terms['label'].' · '.$terms['borrower']['name']"
+        :back="route('deals.index')"
+        back-label="Selected deals"
+        :status="$status"
+        :meta="'Deal '.strtoupper(substr($record->id, -8))"
+    >
+        @if ($can['viewSettlement'])
+            <a class="btn btn--secondary" href="{{ route('deals.settlement', $record) }}">View settlement details →</a>
+        @endif
+    </x-page-header>
+
+    <x-stepper :steps="$progress" />
+
+    @if ($status === 'settled')
+        <x-next-step tone="done" title="Settled">
+            <p>Both institutions independently confirmed. Settlement recorded <x-when :at="$record->settled_at" />.</p>
+        </x-next-step>
+    @elseif ($status === 'cancelled')
+        <x-next-step tone="closed" title="The fee reservation is closed">
+            <p>The reservation is closed. Late or unmatched funds require refund review and cannot unlock this deal.</p>
+        </x-next-step>
+    @elseif ($status === 'closed_unsettled')
+        <x-next-step tone="closed" title="Closed without settlement">
+            <p>Closed without both approved confirmations. No transfer was reversed by this platform.</p>
+        </x-next-step>
+    @elseif ($ownChange)
+        @if ($ownChange['canReview'])
+            <x-next-step :title="'Review instruction update: version '.$ownChange['version']">
+                <p>This version replaces the selected instructions once approved. Financial terms and the platform fee do not change.</p>
+                <x-decision-form :action="route('deal-instructions.review', ['deal' => $record, 'change' => $ownChange['id']])" approve="Approve instruction update" reject="Reject update" id="change-reason" />
+            </x-next-step>
         @else
-            <p class="muted">Fee quote pending. Payment becomes available once the platform fee and deadline are confirmed.</p>
+            <x-next-step tone="waiting" title="Instruction update pending">
+                <p>Version {{ $ownChange['version'] }} requires independent approval before it can replace the selected instructions.</p>
+            </x-next-step>
         @endif
-        @if ($data['status'] === 'cancelled')
-            <div class="notice">The reservation is closed. Late or unmatched funds require refund review and cannot unlock this deal.</div>
-        @elseif ($data['identityUnlocked'])
-            <div class="notice">The platform fee has been verified.</div>
-        @elseif ($data['instructionReviewPending'])
-            <p class="muted">An instruction update requires independent lender review before payment can proceed.</p>
-        @elseif ($record->hasPendingRefund())
-            <p class="muted">A received payment requires operations review before another payment attempt.</p>
-        @elseif ($record->hasPendingPayment())
-            <p class="muted">Payment requested. Awaiting independent provider confirmation.</p>
-        @endif
-        @if ($data['can']['initiatePayment'])
-            <form method="post" action="{{ route('payments.store', $record) }}">
-                @csrf
-                <button class="button">Request demo fee payment</button>
-            </form><small>The borrower approver can initiate payment. Provider confirmation is required to unlock details.</small>
-        @endif
-    </section><section class="panel"><h2>{{ $data['can']['viewSettlement'] ? 'Settlement details available.' : 'Settlement details protected.' }}</h2>
-        @if ($data['can']['viewSettlement'])
-            <p>The selected lender’s independently approved details are ready for your institution’s settlement process.</p><a class="button" href="{{ route('deals.settlement', $record) }}">View settlement details →</a>
-        @else
-            <p class="muted">Selected lender contacts and account details require a verified platform fee and authorized treasury access from eligible institutions.</p>
-        @endif
-        <dl><dt>Collateral</dt><dd>{{ ucwords(str_replace('_', ' ', $data['terms']['collateral'])) }}</dd><dt>Interest payment</dt><dd>{{ ucwords(str_replace('_', ' ', $data['terms']['interestPayment'])) }}</dd><dt>Expected settlement</dt><dd>{{ $data['terms']['settlementDate'] }}</dd></dl><a class="small-link" href="{{ route('funding.show', $data['fundingRequestId']) }}">View funding request →</a>
-    </section></div>
-    @if ($payments->isNotEmpty())
-        <section class="panel"><h2>Your fee payment history</h2>
-            @foreach ($payments as $payment)
-                <div class="review-row"><div><strong>{{ $payment->currency }} {{ $payment->amount }}</strong><small>{{ $payment->provider_reference }}</small><small>{{ $payment->failure_reason ? ucwords(str_replace('_', ' ', $payment->failure_reason)) : 'Provider confirmation tracked independently.' }}</small></div><span class="badge {{ $payment->status->value }}">{{ $payment->status->label() }}</span></div>
-            @endforeach
-        </section>
-    @endif
-    @isset ($data['instructionChange'])
-        <section class="panel"><h2>Instruction update pending</h2><p class="muted">Version {{ $data['instructionChange']['version'] }} requires independent approval before it can replace the selected instructions.</p>
-            @if ($data['instructionChange']['canReview'])
-                <form method="post" action="{{ route('deal-instructions.review', ['deal' => $record, 'change' => $data['instructionChange']['id']]) }}">
+    @elseif ($data['instructionReviewPending'])
+        <x-next-step tone="waiting" title="An instruction update is under review">
+            <p>An instruction update requires independent review before payment or settlement can proceed.</p>
+        </x-next-step>
+    @elseif ($receivingInstructionsMissing)
+        <x-next-step title="Receiving instructions required" kicker="Set up first">
+            <p>The lender needs your approved receiving account. A treasury maker proposes a version here and a different approver approves it before payment or settlement can continue.</p>
+            @can('viewAny', \App\Models\SettlementInstruction::class)
+                <div class="btn-row"><a class="btn btn--secondary" href="{{ route('instructions.index') }}">Manage instructions</a></div>
+            @endcan
+        </x-next-step>
+    @elseif ($status === 'awaiting_fee')
+        @if ($can['initiatePayment'])
+            <x-next-step :title="'Pay the platform fee: '.$fee['currency'].' '.\App\Models\FundingRequest::groupDecimal($fee['amount'])">
+                <p>Due by <x-when :at="$record->fee_deadline" />. Lender details unlock only after the payment provider confirms it.</p>
+                <form method="post" action="{{ route('payments.store', $record) }}">
                     @csrf
-                    <label for="change-reason">Review note (required when rejecting)</label><textarea id="change-reason" name="reason" rows="2" maxlength="500"></textarea><button class="button" name="decision" value="approve">Approve instruction update</button><button class="button secondary" name="decision" value="reject">Reject update</button>
+                    <div class="btn-row"><button class="btn btn--primary">Request demo fee payment</button></div>
                 </form>
-            @endif
-        </section>
-    @endisset
-    @if ($instructions->isNotEmpty() && !$data['instructionReviewPending'])
-        <section class="panel"><h2>Update approved settlement instructions</h2><p class="muted">A new version requires independent lender approval. Resolve pending payments or refunds first. After unlock, changes require an open dispute and fresh settlement confirmations.</p><form method="post" action="{{ route('deal-instructions.store', $record) }}">
-            @csrf
-            <label for="settlement_instruction_id">Approved version</label><select id="settlement_instruction_id" name="settlement_instruction_id">
-                @foreach ($instructions as $instruction)
-                    <option value="{{ $instruction->id }}">Version {{ $instruction->version }} · {{ strtoupper($instruction->details['channel']) }}</option>
-                @endforeach
-            </select><button class="button secondary">Propose instruction update</button>
-        </form></section>
-    @endif
-    <section class="panel"><h2>Settlement confirmations</h2><p class="muted">These are institution attestations of an off-platform transfer. The platform does not independently verify or execute the transfer.</p>
-        <div class="summary-grid">
-            @foreach (['borrower' => 'Borrower institution', 'lender' => 'Lender institution'] as $side => $label)
-                <div class="summary"><span class="eyebrow">{{ $label }}</span><strong>{{ ucwords(str_replace('_', ' ', $data['settlement'][$side])) }}</strong></div>
-            @endforeach
-        </div>
-        @if ($data['settlement']['disputeOpen'])
-            <div class="notice">Dispute review is open. Approved attestations can be collected, but operations must record the resolution before settlement is finalized.</div>
-        @elseif ($data['status'] === 'settled')
-            <div class="notice">Both institutions independently confirmed. Settlement recorded {{ $record->settled_at->format('d M Y, H:i') }} UTC.</div>
-        @elseif ($data['status'] === 'closed_unsettled')
-            <div class="notice">Closed without both approved confirmations. No transfer was reversed by this platform.</div>
+            </x-next-step>
+        @elseif ($isLender)
+            <x-next-step tone="waiting" title="Waiting for the borrower to pay the platform fee">
+                <p>@if ($fee) The borrower has until <x-when :at="$record->fee_deadline" />. @endif Your identity and account stay hidden until the fee is verified.</p>
+            </x-next-step>
+        @elseif ($pendingPayment)
+            <x-next-step tone="waiting" title="Payment requested">
+                <p>Awaiting independent provider confirmation. Payment reference: <span class="ref">{{ $pendingPayment->provider_reference }}</span></p>
+                @if ($demoPaymentsEnabled)
+                    <span class="code">Demo only. Simulate the provider from the server:<br>php artisan payments:simulate '{{ $pendingPayment->provider_reference }}'</span>
+                @endif
+            </x-next-step>
+        @elseif ($record->hasPendingRefund())
+            <x-next-step tone="waiting" title="A received payment is under review">
+                <p>A received payment requires operations review before another payment attempt.</p>
+            </x-next-step>
+        @elseif (! $fee)
+            <x-next-step tone="waiting" title="Fee quote pending">
+                <p>Fee quote pending. Payment becomes available once the platform fee and deadline are confirmed.</p>
+            </x-next-step>
         @else
-            <p class="muted">One approved confirmation keeps settlement pending. Both institutions must confirm against the same approved instruction version.</p>
+            <x-next-step tone="waiting" title="A treasury approver pays the platform fee">
+                <p>Due by <x-when :at="$record->fee_deadline" />. A borrower treasury approver can start the payment.</p>
+            </x-next-step>
         @endif
-        @if ($data['can']['proposeConfirmation'])
+    @elseif ($reviewable)
+        <x-next-step title="Review your institution's settlement confirmation">
+            <p>A colleague proposed this attestation. You must be a different person from the proposer.</p>
+            <dl class="kv">
+                @isset ($reviewable['settlementAt'])
+                    <dt>Transfer completed</dt><dd><x-when :at="$reviewable['settlementAt']" /></dd>
+                @endisset
+                @if ($reviewable['reference'] ?? null)
+                    <dt>Reference</dt><dd>{{ $reviewable['reference'] }}</dd>
+                @endif
+                @if ($reviewable['note'] ?? null)
+                    <dt>Institution note</dt><dd>{{ $reviewable['note'] }}</dd>
+                @endif
+            </dl>
+            <x-decision-form :action="route('confirmations.review', ['deal' => $record, 'confirmation' => $reviewable['id']])" approve="Approve settlement confirmation" reject="Reject confirmation" :id="'review-'.$reviewable['id']" />
+        </x-next-step>
+    @elseif ($can['proposeConfirmation'])
+        <x-next-step :title="$isLender ? 'Send the principal, then confirm it' : 'Confirm the principal was received'">
+            <p>
+                @if ($isLender)
+                    Send the principal to the borrower's receiving account through your official banking channel, then attest the transfer.
+                @else
+                    When the principal reaches your receiving account, attest it here.
+                @endif
+                A different treasury approver at your bank reviews it.
+            </p>
+            @if ($can['viewSettlement'])
+                <p><a href="{{ route('deals.settlement', $record) }}">Open the settlement details</a></p>
+            @endif
             <form method="post" action="{{ route('confirmations.store', $record) }}">
                 @csrf
-                <label for="settlement_at">Transfer completed at (UTC)</label><input id="settlement_at" type="datetime-local" name="settlement_at" required step="1" value="{{ now()->format('Y-m-d\\TH:i:s') }}">
-                <label for="settlement-reference">Settlement reference (optional)</label><input id="settlement-reference" name="reference" maxlength="100">
-                <label for="settlement-note">Institution note (optional)</label><textarea id="settlement-note" name="note" maxlength="1000" rows="2"></textarea>
-                <button class="button">Propose settlement confirmation</button>
+                <div class="form-row">
+                    <div>
+                        <label for="settlement_at">Transfer completed at (UTC)</label>
+                        <input id="settlement_at" type="datetime-local" name="settlement_at" required step="1" value="{{ old('settlement_at', now()->format('Y-m-d\TH:i:s')) }}">
+                    </div>
+                    <div>
+                        <label for="settlement-reference">Settlement reference <span class="muted">(optional)</span></label>
+                        <input id="settlement-reference" name="reference" value="{{ old('reference') }}" maxlength="100">
+                    </div>
+                </div>
+                <label for="settlement-note">Institution note <span class="muted">(optional)</span></label>
+                <textarea id="settlement-note" name="note" maxlength="1000" rows="2">{{ old('note') }}</textarea>
+                <div class="btn-row"><button class="btn btn--primary">Propose settlement confirmation</button></div>
             </form>
-        @endif
-        @foreach ($confirmations as $confirmation)
-            <div class="review-row"><div><strong>Your institution · {{ ucfirst($confirmation['status']) }}</strong>
-                @isset ($confirmation['reference'])<small>Reference: {{ $confirmation['reference'] }}</small>@endisset
-                @isset ($confirmation['note'])<small>{{ $confirmation['note'] }}</small>@endisset
-                @isset ($confirmation['reviewReason'])<small>Review: {{ $confirmation['reviewReason'] }}</small>@endisset
-            </div>
-            @if ($confirmation['canReview'])
-                <form method="post" action="{{ route('confirmations.review', ['deal' => $record, 'confirmation' => $confirmation['id']]) }}">
-                    @csrf
-                    <label for="review-{{ $confirmation['id'] }}">Review reason (required if rejecting)</label><input id="review-{{ $confirmation['id'] }}" name="reason" maxlength="500">
-                    <button class="button" name="decision" value="approve">Approve settlement confirmation</button><button class="button secondary" name="decision" value="reject">Reject confirmation</button>
-                </form>
-            @endif</div>
-        @endforeach
-    </section>
-    @if ($data['can']['openDispute'])
-        <section class="panel"><h2>Report a settlement issue</h2><p class="muted">An institution approver can open a dispute for operations review.</p><form method="post" action="{{ route('disputes.store', $record) }}">
-            @csrf
-            <label for="dispute-description">Issue and evidence summary</label><textarea id="dispute-description" name="description" required minlength="10" maxlength="2000" rows="3"></textarea><button class="button secondary">Open settlement dispute</button>
-        </form></section>
+        </x-next-step>
+    @elseif ($ownConfirmation && $ownConfirmation['status'] === 'pending')
+        <x-next-step tone="waiting" title="Your confirmation is awaiting review">
+            <p>A different treasury approver at your bank must review it.</p>
+        </x-next-step>
+    @elseif ($status === 'disputed')
+        <x-next-step tone="waiting" title="Dispute under operations review">
+            <p>Dispute review is open. Approved attestations can be collected, but operations must record the resolution before settlement is finalized.</p>
+        </x-next-step>
+    @elseif ($ownConfirmation)
+        <x-next-step tone="waiting" :title="'Waiting for the '.$otherInstitution.' to confirm'">
+            <p>Your institution has confirmed. The deal settles when the {{ $otherInstitution }} institution's confirmation is approved.</p>
+        </x-next-step>
+    @else
+        <x-next-step tone="waiting" title="Settlement is in progress">
+            <p>Treasury staff at both institutions confirm the off-platform transfer.</p>
+        </x-next-step>
     @endif
-    @foreach ($disputes as $dispute)
-        <section class="panel"><h2>Dispute · {{ ucwords(str_replace('_', ' ', $dispute['status'])) }}</h2>
-            @isset ($dispute['description'])<p>{{ $dispute['description'] }}</p>@endisset
-            @isset ($dispute['resolutionNote'])<p>{{ $dispute['resolutionNote'] }}</p>@endisset
-        </section>
-    @endforeach
-    <section class="panel"><h2>Deal timeline</h2><h3>Selection and fee milestones</h3>
-        @foreach ($milestones as $milestone)
-            <div class="review-row"><strong>{{ $milestone['message'] }}</strong><small>{{ \Carbon\CarbonImmutable::parse($milestone['at'])->format('d M Y, H:i:s') }} UTC</small></div>
-        @endforeach
-        <h3>Settlement activity · latest first</h3>
-        @foreach ($events as $event)
-            <div class="review-row"><strong>{{ \App\Actions\RecordDealActivity::label($event->kind, $event->side) }}</strong><small>{{ $event->created_at->format('d M Y, H:i:s') }} UTC</small></div>
-        @endforeach
-        {{ $events->links() }}
-    </section>
+
+    @if ($data['settlement']['disputeOpen'] && ($reviewable || $can['proposeConfirmation']))
+        <div class="alert alert--warning">Dispute review is open. Approved attestations can be collected, but operations must record the resolution before settlement is finalized.</div>
+    @endif
+    @if ($data['instructionsUpdatedAt'])
+        <div class="alert alert--info">Settlement instructions were independently reviewed and updated. Selected financial terms and the platform fee remain fixed.</div>
+    @endif
+
+    <div class="facts">
+        <x-fact label="Selected rate" :hint="'Annual simple · '.$terms['dayCount']">{{ $terms['rate'] }}%</x-fact>
+        <x-fact label="Required liquidity" :hint="$terms['tenorDays'].' days'"><x-money :currency="$terms['currency']" :amount="$terms['amount']" /></x-fact>
+        <x-fact label="Expected settlement"><x-when :at="$terms['settlementDate']" date-only /></x-fact>
+        <x-fact label="Offer valid until"><x-when :at="$record->offer_valid_until" /></x-fact>
+    </div>
+
+    <div class="grid-main">
+        <div class="stack">
+            <section class="panel">
+                <h2>Settlement confirmations</h2>
+                <div class="party-grid">
+                    @foreach (['borrower' => 'Borrower institution', 'lender' => 'Lender institution'] as $party => $label)
+                        <div class="party">
+                            <span class="party__label">{{ $label }}{{ $party === $side ? ' (you)' : '' }}</span>
+                            <x-status :value="$data['settlement'][$party]" />
+                        </div>
+                    @endforeach
+                </div>
+                <p class="muted party-note">These are institution attestations of an off-platform transfer. The platform does not independently verify or execute the transfer.</p>
+                @foreach ($confirmations as $confirmation)
+                    <div class="row">
+                        <div class="row__text">
+                            <strong>Your institution</strong>
+                            @isset ($confirmation['reference'])
+                                <small>Reference: {{ $confirmation['reference'] }}</small>
+                            @endisset
+                            @isset ($confirmation['note'])
+                                <small>{{ $confirmation['note'] }}</small>
+                            @endisset
+                            @isset ($confirmation['reviewReason'])
+                                <small>Review: {{ $confirmation['reviewReason'] }}</small>
+                            @endisset
+                        </div>
+                        <x-status :value="$confirmation['status']" />
+                    </div>
+                @endforeach
+                @unless ($can['viewSettlement'])
+                    <p class="muted">Selected lender contacts and account details require a verified platform fee and authorized treasury access from eligible institutions.</p>
+                @endunless
+            </section>
+
+            @if ($instructions->isNotEmpty() && ! $data['instructionReviewPending'])
+                <details class="panel" @if ($receivingInstructionsMissing) open @endif>
+                    <summary>Update approved settlement instructions</summary>
+                    <p class="muted">A new version requires independent approval within your institution. Resolve pending payments or refunds first. After unlock, changes require an open dispute and fresh settlement confirmations.</p>
+                    <form method="post" action="{{ route('deal-instructions.store', $record) }}">
+                        @csrf
+                        <label for="settlement_instruction_id">Approved version</label>
+                        <select id="settlement_instruction_id" name="settlement_instruction_id">
+                            @foreach ($instructions as $instruction)
+                                <option value="{{ $instruction->id }}">Version {{ $instruction->version }} · {{ strtoupper($instruction->details['channel']) }}</option>
+                            @endforeach
+                        </select>
+                        <div class="btn-row"><button class="btn btn--secondary">Propose instruction update</button></div>
+                    </form>
+                </details>
+            @endif
+
+            @if ($can['openDispute'])
+                <details class="panel">
+                    <summary>Report a settlement issue</summary>
+                    <p class="muted">An institution approver can open a dispute for operations review.</p>
+                    <form method="post" action="{{ route('disputes.store', $record) }}">
+                        @csrf
+                        <label for="dispute-description">Issue and evidence summary</label>
+                        <textarea id="dispute-description" name="description" required minlength="10" maxlength="2000" rows="3"></textarea>
+                        <div class="btn-row"><button class="btn btn--danger">Open settlement dispute</button></div>
+                    </form>
+                </details>
+            @endif
+
+            @foreach ($disputes as $dispute)
+                <section class="panel">
+                    <div class="panel__head"><h2>Settlement dispute</h2><x-status :value="$dispute['status'] === 'open' ? 'disputed' : $dispute['status']" :label="ucfirst(str_replace('_', ' ', $dispute['status']))" /></div>
+                    @isset ($dispute['description'])
+                        <p class="long-text">{{ $dispute['description'] }}</p>
+                    @endisset
+                    @isset ($dispute['resolutionNote'])
+                        <p class="long-text">{{ $dispute['resolutionNote'] }}</p>
+                    @endisset
+                </section>
+            @endforeach
+            <section class="panel">
+                <h2>Timeline</h2>
+                <h3 class="subhead">Selection and fee milestones</h3>
+                <ol class="timeline">
+                    @foreach ($milestones as $milestone)
+                        <li><strong>{{ $milestone['message'] }}</strong><small><x-when :at="$milestone['at']" /></small></li>
+                    @endforeach
+                </ol>
+                @if ($events->isNotEmpty())
+                    <h3 class="subhead">Settlement activity</h3>
+                    <ol class="timeline">
+                        @foreach ($events as $event)
+                            <li><strong>{{ \App\Actions\RecordDealActivity::label($event->kind, $event->side) }}</strong><small><x-when :at="$event->created_at" /></small></li>
+                        @endforeach
+                    </ol>
+                    {{ $events->links() }}
+                @endif
+            </section>
+        </div>
+
+        <div class="stack">
+            <section class="panel">
+                <h2>Selected terms</h2>
+                <dl class="kv">
+                    <dt>Collateral</dt><dd>{{ ucfirst(str_replace('_', ' ', $terms['collateral'])) }}</dd>
+                    <dt>Interest payment</dt><dd>{{ ucfirst(str_replace('_', ' ', $terms['interestPayment'])) }}</dd>
+                    <dt>Rate basis</dt><dd>Annual simple · {{ $terms['dayCount'] }}</dd>
+                </dl>
+                @can('view', $record->fundingRequest)
+                    <p class="muted"><a href="{{ route('funding.show', $data['fundingRequestId']) }}">View funding request</a></p>
+                @endcan
+            </section>
+
+            <section class="panel">
+                <div class="panel__head"><h2>Platform fee</h2><span class="tag">Demo · No real money</span></div>
+                @if ($fee)
+                    <dl class="kv">
+                        <dt>Total</dt><dd><strong><x-money :currency="$fee['currency']" :amount="$fee['amount']" /></strong></dd>
+                        <dt>Service fee</dt><dd>{{ $fee['basisPoints'] }} bps of principal</dd>
+                        <dt>Demo tax</dt><dd>{{ $fee['taxAmount'] }}</dd>
+                        <dt>Payment deadline</dt><dd><x-when :at="$record->fee_deadline" /></dd>
+                    </dl>
+                    @if ($data['identityUnlocked'])
+                        <p class="muted">The platform fee has been verified.</p>
+                    @endif
+                @else
+                    <p class="empty-line">Fee quote pending.</p>
+                @endif
+                @foreach ($payments as $payment)
+                    <div class="row">
+                        <div class="row__text">
+                            <strong><x-money :currency="$payment->currency" :amount="$payment->amount" /></strong>
+                            <small class="ref">{{ $payment->provider_reference }}</small>
+                            @if ($payment->failure_reason)
+                                <small>{{ ucfirst(str_replace('_', ' ', $payment->failure_reason)) }}</small>
+                            @endif
+                        </div>
+                        <x-status :value="$payment->status->value" :label="$payment->status->label()" />
+                    </div>
+                @endforeach
+            </section>
+        </div>
+    </div>
 </x-layout>

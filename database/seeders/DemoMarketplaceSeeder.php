@@ -27,6 +27,7 @@ class DemoMarketplaceSeeder extends Seeder
         }
         $this->call(DemoFundingRequestSeeder::class);
         $this->additionalDemoLender();
+        $this->borrowerReceivingInstructions();
         $requests = FundingRequest::query()->whereHas('bank', fn (Builder $query): Builder => $query->where('registration_number', 'DEMO-borrower'))
             ->whereIn('title', ['Working capital liquidity', 'Offer comparison walkthrough'])->where('status', FundingRequestStatus::Open)->where('bidding_deadline', '>', now())->get();
         foreach (['lender-one' => '8.1250', 'lender-three' => '7.9000'] as $key => $rate) {
@@ -59,6 +60,27 @@ class DemoMarketplaceSeeder extends Seeder
                 $offers->review($approver, $offer, OfferApproval::query()->where('offer_id', $offer->id)->where('status', 'pending')->firstOrFail(), true, null);
             }
         }
+    }
+
+    private function borrowerReceivingInstructions(): void
+    {
+        $maker = User::query()->where('email', 'borrower.maker@xfunding.example')->with('membership.bank')->first();
+        $approver = User::query()->where('email', 'borrower.approver@xfunding.example')->with('membership.bank')->first();
+        if (! $maker || ! $approver || ! Gate::forUser($maker)->allows('create', SettlementInstruction::class) || ! $approver->hasBankRole(BankRole::Approver)) {
+            return;
+        }
+        $bankId = $maker->membership->bank_id;
+        $hasCurrentVersion = SettlementInstruction::query()->where('bank_id', $bankId)->where('status', 'approved')->with('bank')->get()
+            ->contains(fn (SettlementInstruction $record): bool => $record->matchesBankProfile());
+        if ($hasCurrentVersion) {
+            return;
+        }
+        $instructions = app(ManageSettlementInstructions::class);
+        $instruction = $instructions->create($maker, [
+            'channel' => 'swift', 'account_name' => $maker->membership->bank->name.' Demo Treasury', 'account_number' => 'DEMO000022220000',
+            'bic' => 'DEMOLKXX', 'contact_name' => 'Borrower Demo Treasury', 'contact_email' => 'borrower.treasury@xfunding.example',
+        ]);
+        $instructions->review($approver, $instruction, true, 'Synthetic local demonstration instructions.');
     }
 
     private function additionalDemoLender(): void

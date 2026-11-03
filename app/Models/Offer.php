@@ -72,6 +72,15 @@ class Offer extends Model
             && $this->settlementInstruction->status === 'approved' && $this->settlementInstruction->matchesBankProfile();
     }
 
+    /**
+     * The selected terms are only reserved until the offer expires, so a selection
+     * needs enough remaining validity for the borrower to pay the platform fee.
+     */
+    public function leavesFeeWindow(): bool
+    {
+        return ! $this->valid_until->isBefore(now()->addMinutes(config('marketplace.minimum_fee_window_minutes')));
+    }
+
     public function bank(): BelongsTo
     {
         return $this->belongsTo(Bank::class);

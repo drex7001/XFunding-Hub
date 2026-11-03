@@ -26,6 +26,13 @@ class AccessRequestController extends Controller
         return back()->with('status', 'Role change submitted for independent approval.');
     }
 
+    public function reinstate(StoreAccessRequest $request, BankMembership $membership, ManageBankAccess $action): RedirectResponse
+    {
+        $action->proposeReinstatement($request->user(), $request->user()->membership->bank, $request->validated(), $membership);
+
+        return back()->with('status', 'Reinstatement submitted for independent approval.');
+    }
+
     public function review(Request $request, AccessRequest $accessRequest, ManageBankAccess $action): RedirectResponse
     {
         Gate::authorize('view', $accessRequest);

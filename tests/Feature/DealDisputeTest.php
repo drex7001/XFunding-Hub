@@ -141,7 +141,7 @@ it('independently corrects disputed instructions and requires fresh confirmation
     $this->postJson(route('api.confirmations.store', $deal), settlementPayload())->assertConflict();
     $this->getJson(route('api.deals.settlement', $deal))->assertForbidden();
     signInUser(User::factory()->platformAdmin()->create());
-    $this->postJson(route('disputes.resolve', $dispute), ['outcome' => 'closed_unsettled', 'reason' => 'Pending instruction review must complete first.'])->assertConflict();
+    $this->postJson(route('disputes.resolve', $dispute), ['outcome' => 'settled', 'reason' => 'Pending instruction review must complete first.'])->assertConflict();
     app(ChangeDealInstructions::class)->review(bankStaff(BankRole::Approver, $deal->lenderBank), $change, true, null);
     expect($old->fresh()->status)->toBe('superseded')->and($old->fresh()->approved_slot)->toBeNull()
         ->and($change->fresh()->previous_snapshot)->toBe($original)
@@ -168,4 +168,64 @@ it('enforces a single open dispute through a database constraint', function () {
     $deal = unlockedDeal();
     DealDispute::factory()->create(['deal_id' => $deal->id]);
     expect(fn () => DealDispute::factory()->create(['deal_id' => $deal->id]))->toThrow(QueryException::class);
+});
+
+it('closes a dispute unsettled when confirmations exist but an institution became ineligible', function () {
+    $deal = unlockedDeal();
+    $dispute = app(ManageDealDisputes::class)->open(bankStaff(BankRole::Approver, $deal->borrowerBank), $deal, 'Synthetic discrepancy pending investigation.');
+    confirmedInstitution($deal->fresh(), $deal->borrowerBank);
+    confirmedInstitution($deal->fresh(), $deal->lenderBank);
+    $deal->lenderBank->forceFill(['status' => BankStatus::Suspended, 'can_lend' => false])->save();
+    signInUser(User::factory()->platformAdmin()->create());
+
+    $this->post(route('disputes.review', $dispute), ['reason' => 'Inspect the settlement evidence.'])->assertOk()->assertSee('Close without confirmed settlement')->assertDontSee('Resolve as settled');
+    $this->postJson(route('disputes.resolve', $dispute), ['outcome' => 'settled', 'reason' => 'The lender is no longer eligible.'])->assertConflict();
+    $this->postJson(route('disputes.resolve', $dispute), ['outcome' => 'closed_unsettled', 'reason' => 'The lender is no longer eligible.'])->assertOk()->assertJsonPath('data.status', 'closed_unsettled');
+
+    $request = $deal->fundingRequest->fresh();
+    expect($request->status)->toBe(FundingRequestStatus::Cancelled)->and($request->cancelled_at)->not->toBeNull();
+});
+
+it('refuses to close a dispute unsettled while both eligible institutions have confirmed', function () {
+    $deal = unlockedDeal();
+    $dispute = app(ManageDealDisputes::class)->open(bankStaff(BankRole::Approver, $deal->borrowerBank), $deal, 'Synthetic discrepancy pending investigation.');
+    confirmedInstitution($deal->fresh(), $deal->borrowerBank);
+    confirmedInstitution($deal->fresh(), $deal->lenderBank);
+    signInUser(User::factory()->platformAdmin()->create());
+
+    $this->postJson(route('disputes.resolve', $dispute), ['outcome' => 'closed_unsettled', 'reason' => 'Attempted closure despite confirmations.'])->assertConflict();
+    expect($deal->fresh()->status)->toBe(DealStatus::Disputed);
+});
+
+it('lets operations close a dispute when a suspended lender cannot review its pending instruction change', function () {
+    $deal = unlockedDeal();
+    $lender = $deal->lenderBank;
+    $dispute = app(ManageDealDisputes::class)->open(bankStaff(BankRole::Approver, $deal->borrowerBank), $deal, 'Synthetic discrepancy pending investigation.');
+    $instruction = SettlementInstruction::factory()->approved()->create(['bank_id' => $lender->id]);
+    $change = app(ChangeDealInstructions::class)->propose(bankStaff(BankRole::Maker, $lender), $deal->fresh(), $instruction->id);
+    $lender->forceFill(['status' => BankStatus::Suspended, 'can_lend' => false])->save();
+    signInUser(User::factory()->platformAdmin()->create());
+
+    $this->postJson(route('disputes.resolve', $dispute), ['outcome' => 'closed_unsettled', 'reason' => 'The lender can no longer review its change.'])->assertOk();
+
+    expect($change->fresh()->status)->toBe('superseded')->and($change->fresh()->pending_slot)->toBeNull()
+        ->and($deal->fresh()->status)->toBe(DealStatus::ClosedUnsettled);
+});
+
+it('returns the stored open status when a dispute is created through the API', function () {
+    $deal = unlockedDeal();
+    signInUser(bankStaff(BankRole::Approver, $deal->borrowerBank));
+
+    $this->postJson(route('api.disputes.store', $deal), ['description' => 'The receiving treasury reports a discrepancy.'])->assertCreated()->assertJsonPath('data.status', 'open');
+});
+
+it('hides the funding request link from a lender once the closed request is no longer readable', function () {
+    $deal = unlockedDeal();
+    $maker = bankStaff(BankRole::Maker, $deal->lenderBank);
+    $dispute = app(ManageDealDisputes::class)->open(bankStaff(BankRole::Approver, $deal->borrowerBank), $deal, 'Synthetic discrepancy pending investigation.');
+    signInUser($maker);
+    $this->get(route('deals.show', $deal))->assertOk()->assertSee('View funding request');
+    app(ManageDealDisputes::class)->resolve(User::factory()->platformAdmin()->create(), $dispute, 'closed_unsettled', 'Neither institution could confirm.');
+
+    $this->get(route('deals.show', $deal))->assertOk()->assertDontSee('View funding request');
 });

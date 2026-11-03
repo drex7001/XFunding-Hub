@@ -143,8 +143,8 @@ it('renders the funding creation and draft editing forms for a maker', function 
     $record = fundingDraft($maker);
     signInUser($maker);
 
-    $this->get(route('funding.create'))->assertOk()->assertSee('Create a funding request.');
-    $this->get(route('funding.edit', $record))->assertOk()->assertSee('Refine your request.');
+    $this->get(route('funding.create'))->assertOk()->assertSee('New funding request');
+    $this->get(route('funding.edit', $record))->assertOk()->assertSee('Edit funding request');
 });
 
 it('keeps the published borrower profile unchanged after a bank profile edit', function () {

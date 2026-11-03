@@ -20,7 +20,7 @@ use Illuminate\Support\Str;
 
 class ManageFeePayments
 {
-    public function __construct(private WithLockedDeal $lock, private DemoPaymentProvider $provider, private RecordAuditEvent $audit) {}
+    public function __construct(private WithLockedDeal $lock, private DemoPaymentProvider $provider, private RecordAuditEvent $audit, private RecordDealActivity $activity) {}
 
     public function initiate(User $actor, Deal $deal): FeePayment
     {
@@ -70,6 +70,7 @@ class ManageFeePayments
         $deal->feePayments()->where('status', FeePaymentStatus::Pending)->update(['status' => FeePaymentStatus::Failed, 'pending_slot' => null, 'failure_reason' => 'fee_deadline']);
         DealInstructionChange::query()->where('deal_id', $deal->id)->where('status', 'pending')->update(['status' => 'superseded', 'pending_slot' => null]);
         $this->audit->handle(null, 'fee.deadline_expired', $deal->fundingRequest, ['deal_id' => $deal->id]);
+        $this->activity->notify(null, $deal, 'cancelled');
 
         return true;
     }

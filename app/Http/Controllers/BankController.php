@@ -53,14 +53,25 @@ class BankController extends Controller
 
     public function update(UpdateBankRequest $request, Bank $bank, RecordAuditEvent $audit): RedirectResponse
     {
-        DB::transaction(function () use ($request, $bank, $audit): void {
+        $changed = DB::transaction(function () use ($request, $bank, $audit): bool {
             $bank = Bank::query()->lockForUpdate()->findOrFail($bank->id);
             Gate::authorize('update', $bank);
-            $bank->fill($request->validated())->forceFill(['status' => BankStatus::Pending, 'can_borrow' => false, 'can_lend' => false, 'verified_at' => null])->save();
+            $attributes = $request->validated();
+            $sameCapabilities = collect($attributes['requested_capabilities'])->sort()->values()->all() === collect($bank->requested_capabilities)->sort()->values()->all();
+            if ($sameCapabilities) {
+                unset($attributes['requested_capabilities']);
+            }
+            $bank->fill($attributes);
+            if (! $bank->isDirty()) {
+                return false;
+            }
+            $bank->forceFill(['status' => BankStatus::Pending, 'can_borrow' => false, 'can_lend' => false, 'verified_at' => null])->save();
             $audit->handle($request->user(), 'bank.profile_updated', $bank);
+
+            return true;
         });
 
-        return back()->with('status', 'Profile saved. Platform verification is required before marketplace access.');
+        return back()->with('status', $changed ? 'Profile saved. Platform verification is required before marketplace access.' : 'No profile changes were found. Your verification is unchanged.');
     }
 
     public function verify(Request $request, Bank $bank, RecordAuditEvent $audit): RedirectResponse

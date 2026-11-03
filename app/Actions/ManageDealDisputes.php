@@ -6,6 +6,7 @@ use App\DealStatus;
 use App\FundingRequestStatus;
 use App\Models\Deal;
 use App\Models\DealDispute;
+use App\Models\DealInstructionChange;
 use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 
@@ -25,7 +26,7 @@ class ManageDealDisputes
             $current->forceFill(['status' => DealStatus::Disputed])->save();
             $this->activity->handle($actor, $current, 'dispute.opened', $dispute->bank_id);
 
-            return $dispute->setRelation('deal', $current);
+            return $dispute->refresh()->setRelation('deal', $current);
         });
     }
 
@@ -37,14 +38,15 @@ class ManageDealDisputes
             $current = DealDispute::query()->where('deal_id', $deal->id)->lockForUpdate()->findOrFail($dispute->id);
             Gate::forUser($actor)->authorize('resolve', $current);
             abort_unless($current->status === 'open' && $deal->status === DealStatus::Disputed && $deal->hasVerifiedFee(), 409, 'This dispute is no longer open.');
-            abort_unless($deal->pendingInstructionChange === null, 409, 'Resolve the pending instruction review first.');
             if ($outcome === 'settled') {
                 $this->confirmations->settle($actor, $deal);
             } else {
-                abort_unless($outcome === 'closed_unsettled' && ! $deal->hasBothConfirmations(), 409, 'Both institutions have approved settlement; review the evidence before resolving.');
+                $canSettle = $deal->settlementReady() && $deal->hasBothConfirmations();
+                abort_unless($outcome === 'closed_unsettled' && ! $canSettle, 409, 'Both institutions have approved settlement; review the evidence before resolving.');
                 $deal->forceFill(['status' => DealStatus::ClosedUnsettled, 'closed_unsettled_at' => now()])->save();
-                $deal->fundingRequest->forceFill(['status' => FundingRequestStatus::Cancelled])->save();
+                $deal->fundingRequest->forceFill(['status' => FundingRequestStatus::Cancelled, 'cancelled_at' => now()])->save();
                 $deal->confirmations()->where('status', 'pending')->update(['status' => 'superseded', 'pending_slot' => null, 'updated_at' => now()]);
+                DealInstructionChange::query()->where('deal_id', $deal->id)->where('status', 'pending')->update(['status' => 'superseded', 'pending_slot' => null, 'updated_at' => now()]);
                 $this->activity->handle($actor, $deal, 'closed_unsettled');
             }
             $current->forceFill(['status' => $outcome, 'open_slot' => null, 'resolved_by' => $actor->id, 'resolved_at' => now(), 'resolution_note' => $reason])->save();

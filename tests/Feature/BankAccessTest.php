@@ -1,9 +1,11 @@
 <?php
 
+use App\Actions\ManageBankAccess;
 use App\BankRole;
 use App\BankStatus;
 use App\Models\AccessRequest;
 use App\Models\Bank;
+use App\Models\BankInvitation;
 use App\Models\User;
 use App\Notifications\BankInvitationNotification;
 use Illuminate\Support\Facades\DB;
@@ -169,3 +171,37 @@ it('renders the platform operations view', function () {
 
     $this->get(route('operations'))->assertOk()->assertSee('Create a bank');
 });
+
+it('does not store a usable invitation token in the queued job', function () {
+    config(['queue.default' => 'database']);
+    app(ManageBankAccess::class)->createBank(User::factory()->platformAdmin()->create(), [
+        'name' => 'Synthetic Bank', 'country_code' => 'LK', 'registration_number' => 'SYN-QUEUE-1', 'requested_capabilities' => ['lender'],
+        'admin_name' => 'Synthetic Admin', 'admin_email' => 'queued.admin@example.test',
+    ]);
+
+    $command = json_decode(DB::table('jobs')->value('payload'), true)['data']['command'];
+    preg_match_all('/[A-Za-z0-9]{64}/', decrypt($command, false), $candidates);
+    expect(preg_match('/"[A-Za-z0-9]{64}"/', $command))->toBe(0)
+        ->and(collect($candidates[0])->map(fn (string $value): string => hash('sha256', $value)))->toContain(BankInvitation::query()->sole()->token_hash);
+});
+
+it('keeps verification when a bank profile is saved without changes', function (array $capabilities) {
+    $bank = Bank::factory()->verified()->create(['requested_capabilities' => ['borrower', 'lender']]);
+    signInUser(bankStaff(BankRole::Admin, $bank));
+
+    $this->patch(route('banks.update', $bank), ['name' => $bank->name, 'country_code' => $bank->country_code, 'registration_number' => $bank->registration_number, 'requested_capabilities' => $capabilities])
+        ->assertRedirect()->assertSessionHas('status', 'No profile changes were found. Your verification is unchanged.');
+
+    expect($bank->fresh()->status)->toBe(BankStatus::Verified)->and($bank->fresh()->can_lend)->toBeTrue();
+    $this->assertDatabaseMissing('audit_events', ['action' => 'bank.profile_updated']);
+})->with([[['borrower', 'lender']], [['lender', 'borrower']]]);
+
+it('returns not found rather than a server error for malformed route identifiers', function (string $method, string $uri) {
+    signInUser(bankStaff(BankRole::Admin));
+
+    $this->json($method, $uri)->assertNotFound();
+})->with([
+    ['GET', '/banks/not-a-number'], ['GET', '/banks/999999999999999999999'], ['GET', '/documents/not-a-number'],
+    ['POST', '/notifications/not-a-uuid/read'], ['POST', '/bank/members/not-a-number/reinstatement'],
+    ['POST', '/operations/accounts/not-a-number/deactivation'], ['POST', '/access-requests/not-a-number/review'],
+]);

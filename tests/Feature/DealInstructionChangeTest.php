@@ -54,12 +54,12 @@ it('rejects instruction change self approval with combined roles with 403', func
     expect($deal->fresh()->settlement_instruction_id)->not->toBe($instruction->id);
 });
 
-it('hides instruction changes from unrelated banks and denies borrower treasury with 403', function () {
+it('hides instruction changes from unrelated banks and refuses another institution version with 422', function () {
     $borrower = bankStaff();
     $deal = paymentDeal($borrower);
     $instruction = SettlementInstruction::factory()->approved()->create(['bank_id' => $deal->lender_bank_id]);
     signInUser($borrower);
-    $this->postJson(route('api.deal-instructions.store', $deal), ['settlement_instruction_id' => $instruction->id])->assertForbidden();
+    $this->postJson(route('api.deal-instructions.store', $deal), ['settlement_instruction_id' => $instruction->id])->assertUnprocessable();
     signInUser(bankStaff());
     $this->postJson(route('api.deal-instructions.store', $deal), ['settlement_instruction_id' => $instruction->id])->assertNotFound();
     $this->assertDatabaseCount('deal_instruction_changes', 0);

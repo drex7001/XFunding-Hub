@@ -43,7 +43,7 @@ it('prepares a fee quote atomically with approved selection when demo payments a
     $request = FundingRequest::factory()->published()->create(['bank_id' => $borrower->membership->bank_id]);
     $offer = marketOffer(bankStaff(), $request);
     $action = app(SelectOffer::class);
-    $proposal = $action->propose($borrower, $request, $offer->borrower_token);
+    $proposal = $action->propose($borrower, $request, $offer->borrower_token, receivingInstructionId($request));
     $deal = $action->review(bankStaff(BankRole::Approver, $borrower->membership->bank), $proposal, true, null);
 
     expect($deal->hasFeeQuote())->toBeTrue();

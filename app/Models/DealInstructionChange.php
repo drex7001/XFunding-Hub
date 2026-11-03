@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['deal_id', 'settlement_instruction_id', 'proposed_by', 'pending_slot'])]
+#[Fillable(['deal_id', 'settlement_instruction_id', 'side', 'proposed_by', 'pending_slot'])]
 #[Hidden(['settlement_instruction_id', 'proposed_by', 'reviewed_by', 'previous_snapshot'])]
 class DealInstructionChange extends Model
 {
