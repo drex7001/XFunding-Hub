@@ -29,7 +29,11 @@ class StoreOfferRequest extends FormRequest
         return [
             'rate' => ['required', 'string', 'regex:/^(?:0|[1-9][0-9]{0,2})(?:\.[0-9]{1,4})?$/',
                 function (string $attribute, mixed $value, \Closure $fail): void {
-                    if (is_string($value) && preg_match('/^(?:0|[1-9][0-9]{0,2})(?:\.[0-9]{1,4})?$/', $value) && Offer::rateToUnits($value) > 1000000) {
+                    if (
+                        is_string($value)
+                        && preg_match('/^(?:0|[1-9][0-9]{0,2})(?:\.[0-9]{1,4})?$/', $value)
+                        && Offer::rateToUnits($value) > 1000000
+                    ) {
                         $fail('The annual rate must be between 0 and 100 percent.');
                     }
                 }],
@@ -55,8 +59,15 @@ class StoreOfferRequest extends FormRequest
             }
             $record = $this->route('fundingRequest') ?? $this->route('offer')->fundingRequest;
             $validUntil = CarbonImmutable::parse($this->input('valid_until'), 'UTC')->utc();
-            if ($validUntil->isBefore($record->bidding_deadline) || $validUntil->toDateString() > $record->settlement_date->toDateString()) {
-                $validator->errors()->add('valid_until', 'Offer validity must cover the bidding deadline and end on or before settlement day (UTC).');
+            if (
+                $validUntil->isBefore($record->bidding_deadline)
+                || $validUntil->toDateString() > $record->settlement_date->toDateString()
+            ) {
+                $validator->errors()
+                    ->add(
+                        'valid_until',
+                        'Offer validity must cover the bidding deadline and end on or before settlement day (UTC).',
+                    );
             }
         }];
     }

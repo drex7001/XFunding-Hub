@@ -2,6 +2,8 @@
 
 namespace App\Actions;
 
+use App\ApprovalStatus;
+use App\DealDisputeStatus;
 use App\DealStatus;
 use App\FundingRequestStatus;
 use App\Models\Deal;
@@ -12,7 +14,11 @@ use Illuminate\Support\Facades\Gate;
 
 class ManageDealDisputes
 {
-    public function __construct(private WithLockedDeal $lock, private RecordDealActivity $activity, private ManageSettlementConfirmations $confirmations) {}
+    public function __construct(
+        private WithLockedDeal $lock,
+        private RecordDealActivity $activity,
+        private ManageSettlementConfirmations $confirmations,
+    ) {}
 
     public function open(User $actor, Deal $deal, string $description): DealDispute
     {
@@ -21,8 +27,20 @@ class ManageDealDisputes
 
         return $this->lock->handle($actor, $deal, function (Deal $current) use ($actor, $description): DealDispute {
             Gate::forUser($actor)->authorize('create', [DealDispute::class, $current]);
-            abort_unless($current->status === DealStatus::Unlocked && $current->hasVerifiedFee() && $current->activeDispute === null, 409, 'Only an unlocked deal can enter settlement dispute review.');
-            $dispute = DealDispute::create(['deal_id' => $current->id, 'bank_id' => $actor->membership->bank_id, 'opened_by' => $actor->id, 'description' => $description, 'open_slot' => $current->id]);
+            abort_unless(
+                $current->status === DealStatus::Unlocked
+                    && $current->hasVerifiedFee()
+                    && $current->activeDispute === null,
+                409,
+                'Only an unlocked deal can enter settlement dispute review.',
+            );
+            $dispute = DealDispute::create([
+                'deal_id' => $current->id,
+                'bank_id' => $actor->membership->bank_id,
+                'opened_by' => $actor->id,
+                'description' => $description,
+                'open_slot' => $current->id,
+            ]);
             $current->forceFill(['status' => DealStatus::Disputed])->save();
             $this->activity->handle($actor, $current, 'dispute.opened', $dispute->bank_id);
 
@@ -34,25 +52,54 @@ class ManageDealDisputes
     {
         Gate::forUser($actor)->authorize('resolve', $dispute);
 
-        return $this->lock->handle($actor, $dispute->deal, function (Deal $deal) use ($actor, $dispute, $outcome, $reason): Deal {
-            $current = DealDispute::query()->where('deal_id', $deal->id)->lockForUpdate()->findOrFail($dispute->id);
-            Gate::forUser($actor)->authorize('resolve', $current);
-            abort_unless($current->status === 'open' && $deal->status === DealStatus::Disputed && $deal->hasVerifiedFee(), 409, 'This dispute is no longer open.');
-            if ($outcome === 'settled') {
-                $this->confirmations->settle($actor, $deal);
-            } else {
-                $canSettle = $deal->settlementReady() && $deal->hasBothConfirmations();
-                abort_unless($outcome === 'closed_unsettled' && ! $canSettle, 409, 'Both institutions have approved settlement; review the evidence before resolving.');
-                $deal->forceFill(['status' => DealStatus::ClosedUnsettled, 'closed_unsettled_at' => now()])->save();
-                $deal->fundingRequest->forceFill(['status' => FundingRequestStatus::Cancelled, 'cancelled_at' => now()])->save();
-                $deal->confirmations()->where('status', 'pending')->update(['status' => 'superseded', 'pending_slot' => null, 'updated_at' => now()]);
-                DealInstructionChange::query()->where('deal_id', $deal->id)->where('status', 'pending')->update(['status' => 'superseded', 'pending_slot' => null, 'updated_at' => now()]);
-                $this->activity->handle($actor, $deal, 'closed_unsettled');
-            }
-            $current->forceFill(['status' => $outcome, 'open_slot' => null, 'resolved_by' => $actor->id, 'resolved_at' => now(), 'resolution_note' => $reason])->save();
-            $this->activity->handle($actor, $deal, 'dispute.resolved');
+        return $this->lock->handle(
+            $actor,
+            $dispute->deal,
+            function (Deal $deal) use ($actor, $dispute, $outcome, $reason): Deal {
+                $current = DealDispute::query()->where('deal_id', $deal->id)->lockForUpdate()->findOrFail($dispute->id);
+                Gate::forUser($actor)->authorize('resolve', $current);
+                abort_unless(
+                    $current->status === DealDisputeStatus::Open
+                        && $deal->status === DealStatus::Disputed
+                        && $deal->hasVerifiedFee(),
+                    409,
+                    'This dispute is no longer open.',
+                );
+                if ($outcome === DealDisputeStatus::Settled->value) {
+                    $this->confirmations->settle($actor, $deal);
+                } else {
+                    $canSettle = $deal->settlementReady() && $deal->hasBothConfirmations();
+                    abort_unless(
+                        $outcome === DealDisputeStatus::ClosedUnsettled->value && ! $canSettle,
+                        409,
+                        'Both institutions have approved settlement; review the evidence before resolving.',
+                    );
+                    $deal->forceFill(['status' => DealStatus::ClosedUnsettled, 'closed_unsettled_at' => now()])->save();
+                    $deal->fundingRequest->forceFill([
+                        'status' => FundingRequestStatus::Cancelled,
+                        'cancelled_at' => now(),
+                    ])->save();
+                    $superseded = ['status' => ApprovalStatus::Superseded, 'pending_slot' => null, 'updated_at' => now()];
+                    $deal->confirmations()
+                        ->where('status', ApprovalStatus::Pending)
+                        ->update($superseded);
+                    DealInstructionChange::query()
+                        ->where('deal_id', $deal->id)
+                        ->where('status', ApprovalStatus::Pending)
+                        ->update($superseded);
+                    $this->activity->handle($actor, $deal, 'closed_unsettled');
+                }
+                $current->forceFill([
+                    'status' => DealDisputeStatus::from($outcome),
+                    'open_slot' => null,
+                    'resolved_by' => $actor->id,
+                    'resolved_at' => now(),
+                    'resolution_note' => $reason,
+                ])->save();
+                $this->activity->handle($actor, $deal, 'dispute.resolved');
 
-            return $deal->refresh();
-        });
+                return $deal->refresh();
+            },
+        );
     }
 }

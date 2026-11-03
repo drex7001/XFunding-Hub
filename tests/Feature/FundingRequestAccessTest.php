@@ -59,12 +59,20 @@ it('shows eligible lenders only published open requests from other banks', funct
     $open = FundingRequest::factory()->published()->create(['title' => 'Visible funding']);
     FundingRequest::factory()->create(['title' => 'Private draft']);
     FundingRequest::factory()->published()->create(['title' => 'Expired window', 'bidding_deadline' => now()]);
-    FundingRequest::factory()->published()->for(Bank::factory()->suspended())->create(['title' => 'Suspended borrower']);
+    FundingRequest::factory()
+        ->published()
+        ->for(Bank::factory()->suspended())
+        ->create(['title' => 'Suspended borrower']);
     $lender = bankStaff();
-    FundingRequest::factory()->published()->create(['bank_id' => $lender->membership->bank_id, 'title' => 'Own institution']);
+    FundingRequest::factory()
+        ->published()
+        ->create(['bank_id' => $lender->membership->bank_id, 'title' => 'Own institution']);
     signInUser($lender);
 
-    $this->getJson(route('api.marketplace'))->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $open->id);
+    $this->getJson(route('api.marketplace'))
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $open->id);
 });
 
 it('limits lender browsing to treasury makers and approvers', function (BankRole $role, bool $allowed) {
@@ -119,7 +127,10 @@ it('escapes borrower background in lender HTML', function () {
     $record = FundingRequest::factory()->published()->create(['borrower_background' => $background]);
     signInUser(bankStaff());
 
-    $this->get(route('funding.show', $record))->assertOk()->assertSee(e($background), false)->assertDontSee($background, false);
+    $this->get(route('funding.show', $record))
+        ->assertOk()
+        ->assertSee(e($background), false)
+        ->assertDontSee($background, false);
 });
 
 it('keeps marketplace queries bounded as requests increase', function () {

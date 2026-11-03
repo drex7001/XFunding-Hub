@@ -19,7 +19,10 @@ class SettlementInstructionController extends Controller
     public function index(Request $request): View|AnonymousResourceCollection
     {
         Gate::authorize('viewAny', SettlementInstruction::class);
-        $records = SettlementInstruction::query()->where('bank_id', $request->user()->membership->bank_id)->latest('version')->paginate(15);
+        $records = SettlementInstruction::query()
+            ->where('bank_id', $request->user()->membership->bank_id)
+            ->latest('version')
+            ->paginate(15);
         if ($request->expectsJson() || $request->is('api/*')) {
             return SettlementInstructionResource::collection($records);
         }
@@ -27,14 +30,18 @@ class SettlementInstructionController extends Controller
         return view('instructions.index', ['records' => $records]);
     }
 
-    public function store(StoreSettlementInstructionRequest $request, ManageSettlementInstructions $action): RedirectResponse|JsonResponse
-    {
+    public function store(
+        StoreSettlementInstructionRequest $request,
+        ManageSettlementInstructions $action,
+    ): RedirectResponse|JsonResponse {
         $record = $action->create($request->user(), $request->validated());
         if ($request->expectsJson() || $request->is('api/*')) {
             return (new SettlementInstructionResource($record))->response()->setStatusCode(201);
         }
 
-        return redirect()->route('instructions.show', $record)->with('status', 'Instruction version proposed. An independent lender approver must review it.');
+        return redirect()
+            ->route('instructions.show', $record)
+            ->with('status', 'Instruction version proposed. An independent lender approver must review it.');
     }
 
     public function show(Request $request, SettlementInstruction $instruction): View|SettlementInstructionResource
@@ -44,25 +51,46 @@ class SettlementInstructionController extends Controller
             return new SettlementInstructionResource($instruction);
         }
 
-        return view('instructions.show', ['record' => $instruction, 'data' => (new SettlementInstructionResource($instruction))->resolve($request)]);
+        return view('instructions.show', [
+            'record' => $instruction,
+            'data' => (new SettlementInstructionResource($instruction))->resolve($request),
+        ]);
     }
 
-    public function review(Request $request, SettlementInstruction $instruction, ManageSettlementInstructions $action): RedirectResponse|SettlementInstructionResource
-    {
+    public function review(
+        Request $request,
+        SettlementInstruction $instruction,
+        ManageSettlementInstructions $action,
+    ): RedirectResponse|SettlementInstructionResource {
         Gate::authorize('view', $instruction);
-        $data = $request->validate(['decision' => ['required', Rule::in(['approve', 'reject'])], 'reason' => ['nullable', 'required_if:decision,reject', 'string', 'min:5', 'max:500']]);
-        $record = $action->review($request->user(), $instruction, $data['decision'] === 'approve', $data['reason'] ?? null);
+        $data = $request->validate([
+            'decision' => ['required', Rule::in(['approve', 'reject'])],
+            'reason' => ['nullable', 'required_if:decision,reject', 'string', 'min:5', 'max:500'],
+        ]);
+        $record = $action->review(
+            $request->user(),
+            $instruction,
+            $data['decision'] === 'approve',
+            $data['reason'] ?? null,
+        );
 
-        return $request->expectsJson() || $request->is('api/*') ? new SettlementInstructionResource($record) : back()->with('status', 'Instruction review recorded. Existing offers retain their approved version.');
+        return $request->expectsJson() || $request->is('api/*')
+            ? new SettlementInstructionResource($record)
+            : back()->with('status', 'Instruction review recorded. Existing offers retain their approved version.');
     }
 
-    public function retire(Request $request, SettlementInstruction $instruction, ManageSettlementInstructions $action): RedirectResponse|SettlementInstructionResource
-    {
+    public function retire(
+        Request $request,
+        SettlementInstruction $instruction,
+        ManageSettlementInstructions $action,
+    ): RedirectResponse|SettlementInstructionResource {
         Gate::authorize('view', $instruction);
         Gate::authorize('retire', $instruction);
         $data = $request->validate(['reason' => ['required', 'string', 'min:5', 'max:500']]);
         $record = $action->retire($request->user(), $instruction, $data['reason']);
 
-        return $request->expectsJson() || $request->is('api/*') ? new SettlementInstructionResource($record) : back()->with('status', 'Instruction version retired. It can no longer be attached to new work.');
+        return $request->expectsJson() || $request->is('api/*')
+            ? new SettlementInstructionResource($record)
+            : back()->with('status', 'Instruction version retired. It can no longer be attached to new work.');
     }
 }

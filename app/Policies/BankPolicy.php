@@ -12,7 +12,8 @@ class BankPolicy
 {
     public function view(User $user, Bank $bank): Response
     {
-        $allowed = $user->active && ($user->is_platform_admin || ($user->membership?->active && $user->membership->bank_id === $bank->id));
+        $allowed = $user->active
+            && ($user->is_platform_admin || ($user->membership?->active && $user->membership->bank_id === $bank->id));
 
         return $allowed ? Response::allow() : Response::denyAsNotFound();
     }

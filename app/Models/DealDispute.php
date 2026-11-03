@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\DealDisputeStatus;
 use Database\Factories\DealDisputeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -19,7 +20,12 @@ class DealDispute extends Model
 
     protected function casts(): array
     {
-        return ['description' => 'encrypted', 'resolution_note' => 'encrypted', 'resolved_at' => 'immutable_datetime'];
+        return [
+            'status' => DealDisputeStatus::class,
+            'description' => 'encrypted',
+            'resolution_note' => 'encrypted',
+            'resolved_at' => 'immutable_datetime',
+        ];
     }
 
     public function deal(): BelongsTo

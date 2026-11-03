@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\ApprovalStatus;
 use Database\Factories\OfferApprovalFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -16,7 +17,11 @@ class OfferApproval extends Model
 
     protected function casts(): array
     {
-        return ['expected_version' => 'integer', 'reviewed_at' => 'immutable_datetime'];
+        return [
+            'status' => ApprovalStatus::class,
+            'expected_version' => 'integer',
+            'reviewed_at' => 'immutable_datetime',
+        ];
     }
 
     public function offer(): BelongsTo

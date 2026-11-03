@@ -8,7 +8,7 @@
                     <strong>Deal {{ strtoupper(substr($record->deal_id, -8)) }}</strong>
                     <small>Opened <x-when :at="$record->created_at" /></small>
                 </div>
-                <x-status :value="$record->status === 'open' ? 'disputed' : $record->status" :label="ucfirst(str_replace('_', ' ', $record->status))" />
+                <x-status :value="$record->status === \App\DealDisputeStatus::Open ? 'disputed' : $record->status" :label="ucfirst(str_replace('_', ' ', $record->status->value))" />
                 <form class="row-form" method="post" action="{{ route('disputes.review', $record) }}">
                     @csrf
                     <div>

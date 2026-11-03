@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\ApprovalStatus;
 use App\Models\Deal;
 use App\Models\DealInstructionChange;
 use App\Models\SettlementInstruction;
@@ -18,8 +19,12 @@ class DealInstructionChangeFactory extends Factory
     {
         return [
             'deal_id' => Deal::factory()->quoted(), 'proposed_by' => User::factory(),
-            'settlement_instruction_id' => fn (array $a): string => SettlementInstruction::factory()->approved()->create(['bank_id' => Deal::query()->findOrFail($a['deal_id'])->lender_bank_id])->id,
-            'side' => 'lender', 'pending_slot' => fn (array $a): string => $a['deal_id'], 'status' => 'pending',
+            'settlement_instruction_id' => fn (array $a): string => SettlementInstruction::factory()
+                ->approved()
+                ->create(['bank_id' => Deal::query()->findOrFail($a['deal_id'])->lender_bank_id])->id,
+            'side' => 'lender',
+            'pending_slot' => fn (array $a): string => $a['deal_id'],
+            'status' => ApprovalStatus::Pending,
         ];
     }
 }

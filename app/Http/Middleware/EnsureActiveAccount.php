@@ -18,7 +18,9 @@ class EnsureActiveAccount
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
-            return $request->expectsJson() ? response()->json(['message' => 'Please sign in again.'], 401) : redirect()->route('login');
+            return $request->expectsJson()
+                ? response()->json(['message' => 'Please sign in again.'], 401)
+                : redirect()->route('login');
         }
         if (! $user->is_platform_admin) {
             abort_unless($user->membership?->active, 403, 'Your bank membership is inactive.');

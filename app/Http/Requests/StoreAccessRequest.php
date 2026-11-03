@@ -17,7 +17,8 @@ class StoreAccessRequest extends FormRequest
 
     public function authorize(): bool
     {
-        return $this->user()->membership !== null && $this->user()->can('manageMembers', $this->user()->membership->bank);
+        return $this->user()->membership !== null
+            && $this->user()->can('manageMembers', $this->user()->membership->bank);
     }
 
     /** @return array<string, mixed> */
@@ -27,7 +28,12 @@ class StoreAccessRequest extends FormRequest
             'roles' => ['required', 'array', 'min:1', 'max:4'],
             'roles.*' => ['required', Rule::enum(BankRole::class), 'distinct'],
             'name' => [$this->route('membership') ? 'sometimes' : 'required', 'string', 'max:120'],
-            'email' => [$this->route('membership') ? 'sometimes' : 'required', 'email', 'max:255', 'unique:users,email'],
+            'email' => [
+                $this->route('membership') ? 'sometimes' : 'required',
+                'email',
+                'max:255',
+                'unique:users,email',
+            ],
             'bank_id' => ['prohibited'],
             'user_id' => ['prohibited'],
             'is_platform_admin' => ['prohibited'],

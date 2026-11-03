@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\ApprovalStatus;
 use Database\Factories\DealInstructionChangeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -19,7 +20,11 @@ class DealInstructionChange extends Model
 
     protected function casts(): array
     {
-        return ['previous_snapshot' => 'encrypted:array', 'reviewed_at' => 'immutable_datetime'];
+        return [
+            'status' => ApprovalStatus::class,
+            'previous_snapshot' => 'encrypted:array',
+            'reviewed_at' => 'immutable_datetime',
+        ];
     }
 
     public function deal(): BelongsTo

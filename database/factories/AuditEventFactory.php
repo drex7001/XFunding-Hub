@@ -13,6 +13,13 @@ class AuditEventFactory extends Factory
     /** @return array<string, mixed> */
     public function definition(): array
     {
-        return ['bank_id' => Bank::factory(), 'actor_id' => User::factory(), 'action' => 'bank.created', 'subject_type' => Bank::class, 'subject_id' => '1', 'context' => []];
+        return [
+            'bank_id' => Bank::factory(),
+            'actor_id' => User::factory(),
+            'action' => 'bank.created',
+            'subject_type' => Bank::class,
+            'subject_id' => '1',
+            'context' => [],
+        ];
     }
 }

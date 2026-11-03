@@ -23,10 +23,12 @@ it('stores request documents privately and invalidates a pending publication', f
     $approval = $record->approvals()->sole();
     signInUser($maker);
 
-    $this->post(route('funding.documents.store', $record), ['document' => UploadedFile::fake()->create('new-audit.pdf', 10, 'application/pdf')])->assertRedirect(route('funding.show', $record));
+    $this->post(route('funding.documents.store', $record), [
+        'document' => UploadedFile::fake()->create('new-audit.pdf', 10, 'application/pdf'),
+    ])->assertRedirect(route('funding.show', $record));
 
     expect($record->fresh()->status)->toBe(FundingRequestStatus::Draft);
-    expect($approval->fresh()->status)->toBe('superseded');
+    expect($approval->fresh()->status->value)->toBe('superseded');
     $document = $record->documents()->where('original_name', 'new-audit.pdf')->sole();
     Storage::disk('private')->assertExists($document->path);
 });
@@ -38,9 +40,15 @@ it('lets verified lender treasury staff download only published request evidence
     $lender = bankStaff();
     signInUser($lender);
 
-    $this->get(route('funding.documents.show', $document))->assertDownload('financial-report.pdf')->assertHeader('Cache-Control', 'no-store, private');
+    $this->get(route('funding.documents.show', $document))
+        ->assertDownload('financial-report.pdf')
+        ->assertHeader('Cache-Control', 'no-store, private');
 
-    $this->assertDatabaseHas('audit_events', ['action' => 'funding.document_downloaded', 'actor_id' => $lender->id, 'bank_id' => $lender->membership->bank_id]);
+    $this->assertDatabaseHas('audit_events', [
+        'action' => 'funding.document_downloaded',
+        'actor_id' => $lender->id,
+        'bank_id' => $lender->membership->bank_id,
+    ]);
 });
 
 it('hides other banks draft documents with 404', function () {
@@ -70,7 +78,9 @@ it('prevents published document deletion or additions with 403', function () {
     signInUser($maker);
 
     $this->deleteJson(route('funding.documents.destroy', $document))->assertForbidden();
-    $this->postJson(route('funding.documents.store', $record), ['document' => UploadedFile::fake()->create('new.pdf', 10, 'application/pdf')])->assertForbidden();
+    $this->postJson(route('funding.documents.store', $record), [
+        'document' => UploadedFile::fake()->create('new.pdf', 10, 'application/pdf'),
+    ])->assertForbidden();
 
     $this->assertModelExists($document);
     Storage::disk('private')->assertExists($document->path);
@@ -82,7 +92,11 @@ it('rejects financial uploads of unsupported type or size with 422', function (s
     $record = fundingDraft($maker);
     signInUser($maker);
 
-    $this->postJson(route('funding.documents.store', $record), ['document' => UploadedFile::fake()->create($name, $size, $mime)])->assertUnprocessable()->assertJsonValidationErrors('document');
+    $this->postJson(route('funding.documents.store', $record), [
+        'document' => UploadedFile::fake()->create($name, $size, $mime),
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('document');
 
     $this->assertDatabaseCount('funding_documents', 0);
 })->with(['wrong type' => ['report.html', 10, 'text/html'], 'too large' => ['report.pdf', 10241, 'application/pdf']]);
@@ -131,7 +145,7 @@ it('removes an editable draft document and supersedes its old approval', functio
 
     $this->assertModelMissing($document);
     expect($record->fresh()->status)->toBe(FundingRequestStatus::Draft);
-    expect($approval->fresh()->status)->toBe('superseded');
+    expect($approval->fresh()->status->value)->toBe('superseded');
     Storage::disk('private')->assertMissing($document->path);
 });
 

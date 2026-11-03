@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\SettlementInstructionStatus;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Gate;
@@ -12,12 +13,14 @@ class SettlementInstructionResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->id, 'version' => $this->version, 'status' => $this->status,
+            'id' => $this->id, 'version' => $this->version, 'status' => $this->status->value,
             'bank' => $this->bank_profile, 'details' => $this->details, 'reason' => $this->reason,
             'reviewedAt' => $this->reviewed_at?->toIso8601String(),
             'retiredAt' => $this->retired_at?->toIso8601String(),
-            'canReview' => $this->status === 'pending' && Gate::allows('review', $this->resource),
-            'canRetire' => $this->status === 'approved' && Gate::allows('retire', $this->resource),
+            'canReview' => $this->status === SettlementInstructionStatus::Pending
+                && Gate::allows('review', $this->resource),
+            'canRetire' => $this->status === SettlementInstructionStatus::Approved
+                && Gate::allows('retire', $this->resource),
         ];
     }
 }

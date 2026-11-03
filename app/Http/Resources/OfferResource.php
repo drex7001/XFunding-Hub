@@ -24,12 +24,22 @@ class OfferResource extends JsonResource
             'rate' => $this->rate, 'collateral' => $this->collateral, 'interestPayment' => $this->interest_payment,
             'validUntil' => $this->valid_until->toIso8601String(), 'status' => $this->currentStatus()->value,
             'version' => $this->version,
-            'pendingApproval' => $this->pendingApproval ? ['id' => $this->pendingApproval->id, 'expectedVersion' => $this->pendingApproval->expected_version] : null,
+            'pendingApproval' => $this->pendingApproval
+                ? ['id' => $this->pendingApproval->id, 'expectedVersion' => $this->pendingApproval->expected_version]
+                : null,
             'can' => [
                 'update' => Gate::allows('update', $this->resource),
                 'submit' => $open && Gate::allows('submit', $this->resource) && $this->status === OfferStatus::Draft,
-                'review' => $open && Gate::allows('review', $this->resource) && $this->currentStatus() === OfferStatus::PendingApproval,
-                'withdraw' => $open && Gate::allows('withdraw', $this->resource) && in_array($this->currentStatus(), [OfferStatus::Draft, OfferStatus::PendingApproval, OfferStatus::Active], true),
+                'review' => $open
+                    && Gate::allows('review', $this->resource)
+                    && $this->currentStatus() === OfferStatus::PendingApproval,
+                'withdraw' => $open
+                    && Gate::allows('withdraw', $this->resource)
+                    && in_array(
+                        $this->currentStatus(),
+                        [OfferStatus::Draft, OfferStatus::PendingApproval, OfferStatus::Active],
+                        true,
+                    ),
             ],
         ];
         if (Gate::allows('viewAny', SettlementInstruction::class)) {

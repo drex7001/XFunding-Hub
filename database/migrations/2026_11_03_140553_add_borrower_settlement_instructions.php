@@ -13,10 +13,16 @@ return new class extends Migration
             $table->timestamp('retired_at')->nullable();
         });
         Schema::table('selection_proposals', function (Blueprint $table): void {
-            $table->foreignUlid('borrower_settlement_instruction_id')->nullable()->constrained('settlement_instructions')->restrictOnDelete();
+            $table->foreignUlid('borrower_settlement_instruction_id')
+                ->nullable()
+                ->constrained('settlement_instructions')
+                ->restrictOnDelete();
         });
         Schema::table('deals', function (Blueprint $table): void {
-            $table->foreignUlid('borrower_settlement_instruction_id')->nullable()->constrained('settlement_instructions')->restrictOnDelete();
+            $table->foreignUlid('borrower_settlement_instruction_id')
+                ->nullable()
+                ->constrained('settlement_instructions')
+                ->restrictOnDelete();
             $table->text('borrower_instruction_snapshot')->nullable();
         });
         Schema::table('deal_instruction_changes', function (Blueprint $table): void {

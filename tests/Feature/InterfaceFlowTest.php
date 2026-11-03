@@ -14,6 +14,7 @@ use App\Models\SettlementInstruction;
 use App\Models\User;
 use App\Notifications\DealActivityNotification;
 use App\OfferStatus;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
@@ -37,7 +38,11 @@ it('opens the home page for platform operations and shows the waiting count in t
     signInUser(User::factory()->platformAdmin()->create());
     Bank::factory()->create(['name' => 'Waiting For Verification Bank']);
 
-    $this->get(route('dashboard'))->assertOk()->assertSee('Waiting For Verification Bank')->assertSee('Verify institution')->assertSee('nav-count', false);
+    $this->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('Waiting For Verification Bank')
+        ->assertSee('Verify institution')
+        ->assertSee('nav-count', false);
 });
 
 it('returns a stale form submission to its page with the reason', function () {
@@ -46,8 +51,15 @@ it('returns a stale form submission to its page with the reason', function () {
     signInUser($approver);
     $page = route('deals.show', $deal);
 
-    $this->from($page)->post(route('payments.store', $deal))->assertRedirect($page)->assertSessionHasErrors(['conflict' => 'This deal is not awaiting a payable fee quote.']);
-    $this->from($page)->followingRedirects()->post(route('payments.store', $deal))->assertOk()->assertSee('This deal is not awaiting a payable fee quote.');
+    $this->from($page)
+        ->post(route('payments.store', $deal))
+        ->assertRedirect($page)
+        ->assertSessionHasErrors(['conflict' => 'This deal is not awaiting a payable fee quote.']);
+    $this->from($page)
+        ->followingRedirects()
+        ->post(route('payments.store', $deal))
+        ->assertOk()
+        ->assertSee('This deal is not awaiting a payable fee quote.');
 });
 
 it('keeps conflict responses for API clients', function () {
@@ -83,12 +95,27 @@ it('shows grouped amounts in the interface and leaves the API exact', function (
 });
 
 it('describes funding progress for each status', function (FundingRequestStatus $status, array $expected) {
-    $request = FundingRequest::factory()->create(['status' => $status, 'published_at' => $status === FundingRequestStatus::Draft || $status === FundingRequestStatus::PendingApproval ? null : now(), 'bidding_deadline' => now()->addDay()]);
+    $request = FundingRequest::factory()
+        ->create([
+            'status' => $status,
+            'published_at' => $status === FundingRequestStatus::Draft
+                || $status === FundingRequestStatus::PendingApproval
+                ? null
+                : now(),
+            'bidding_deadline' => now()->addDay(),
+        ]);
 
     expect(reachedSteps(app(DescribeWorkflowProgress::class)->funding($request)))->toBe($expected);
 })->with([
     'draft' => [FundingRequestStatus::Draft, ['current', 'upcoming', 'upcoming', 'upcoming', 'upcoming', 'upcoming']],
-    'approval' => [FundingRequestStatus::PendingApproval, ['done', 'current', 'upcoming', 'upcoming', 'upcoming', 'upcoming']],
+    'approval' => [FundingRequestStatus::PendingApproval, [
+        'done',
+        'current',
+        'upcoming',
+        'upcoming',
+        'upcoming',
+        'upcoming',
+    ]],
     'open' => [FundingRequestStatus::Open, ['done', 'done', 'current', 'upcoming', 'upcoming', 'upcoming']],
     'cancelled' => [FundingRequestStatus::Cancelled, ['done', 'done', 'stopped', 'upcoming', 'upcoming', 'upcoming']],
 ]);
@@ -112,17 +139,25 @@ it('puts the right next step on a funding request for each person', function () 
     $bank = $maker->membership->bank;
     $request = fundingDraft($maker);
     signInUser($maker);
-    $this->get(route('funding.show', $request))->assertSee('Attach financial documents')->assertDontSee('Submit for publication approval');
+    $this->get(route('funding.show', $request))
+        ->assertSee('Attach financial documents')
+        ->assertDontSee('Submit for publication approval');
 
     financialEvidence($request);
     $this->get(route('funding.show', $request))->assertSee('Submit for publication approval');
     $this->post(route('funding.submit', $request))->assertRedirect();
-    $this->get(route('funding.show', $request))->assertSee('Publication approval pending')->assertDontSee('Approve publication');
+    $this->get(route('funding.show', $request))
+        ->assertSee('Publication approval pending')
+        ->assertDontSee('Approve publication');
 
     signInUser(bankStaff(BankRole::Approver, $bank));
-    $this->get(route('funding.show', $request))->assertSee('Approve publication')->assertSee('Request changes / reject');
+    $this->get(route('funding.show', $request))
+        ->assertSee('Approve publication')
+        ->assertSee('Request changes / reject');
 
-    expect(FundingRequestApproval::query()->where('funding_request_id', $request->id)->where('status', 'pending')->count())->toBe(1);
+    expect(
+        FundingRequestApproval::query()->where('funding_request_id', $request->id)->where('status', 'pending')->count()
+    )->toBe(1);
 });
 
 it('tells a lender whether to prepare an offer or return to its own', function () {
@@ -132,7 +167,10 @@ it('tells a lender whether to prepare an offer or return to its own', function (
     $this->get(route('funding.show', $request))->assertSee('Prepare an offer')->assertDontSee('Your bank has an offer');
 
     $offer = marketOffer($maker, $request);
-    $this->get(route('funding.show', $request))->assertSee('Your bank has an offer on this request')->assertSee(route('offers.show', $offer))->assertDontSee(route('offers.create', $request));
+    $this->get(route('funding.show', $request))
+        ->assertSee('Your bank has an offer on this request')
+        ->assertSee(route('offers.show', $offer))
+        ->assertDontSee(route('offers.create', $request));
 
     signInUser(bankStaff(BankRole::Approver));
     $this->get(route('funding.show', $request))->assertSee('A treasury maker at your bank prepares offers');
@@ -144,11 +182,16 @@ it('can create an offer and send it for approval in one step', function () {
     $instruction = SettlementInstruction::factory()->approved()->create(['bank_id' => $maker->membership->bank_id]);
     signInUser($maker);
 
-    $this->post(route('offers.store', $request), offerPayload($instruction, $request, ['submit_for_approval' => '1']))->assertRedirect()->assertSessionHas('status', 'Offer sent for independent lender approval.');
+    $this->post(route('offers.store', $request), offerPayload($instruction, $request, ['submit_for_approval' => '1']))
+        ->assertRedirect()
+        ->assertSessionHas('status', 'Offer sent for independent lender approval.');
     $offer = Offer::query()->sole();
     expect($offer->status)->toBe(OfferStatus::PendingApproval)->and($offer->pendingApproval)->not->toBeNull();
 
-    $this->patch(route('offers.update', $offer), offerPayload($instruction, $request, ['rate' => '8.5000', 'submit_for_approval' => '1']))->assertRedirect();
+    $this->patch(
+        route('offers.update', $offer),
+        offerPayload($instruction, $request, ['rate' => '8.5000', 'submit_for_approval' => '1']),
+    )->assertRedirect();
     expect($offer->fresh()->status)->toBe(OfferStatus::PendingApproval)->and($offer->fresh()->rate)->toBe('8.5000');
 });
 
@@ -171,7 +214,11 @@ it('asks the borrower for one receiving account across the whole comparison and 
     marketOffer(bankStaff(), $request, ['rate_units' => 80000]);
     signInUser($maker);
 
-    $response = $this->get(route('funding.offers', $request))->assertOk()->assertSee('Lowest rate')->assertSee('Propose Offer 1')->assertSee('Propose Offer 2');
+    $response = $this->get(route('funding.offers', $request))
+        ->assertOk()
+        ->assertSee('Lowest rate')
+        ->assertSee('Propose Offer 1')
+        ->assertSee('Propose Offer 2');
 
     expect(substr_count($response->getContent(), 'name="settlement_instruction_id"'))->toBe(1)
         ->and(substr_count($response->getContent(), 'name="offer_token"'))->toBe(2);
@@ -186,18 +233,27 @@ it('leads each person on a deal to their own next step', function () {
     signInUser($borrowerApprover);
     $this->get(route('deals.show', $deal))->assertSee('Pay the platform fee')->assertSee('Request demo fee payment');
     signInUser($borrowerMaker);
-    $this->get(route('deals.show', $deal))->assertSee('A treasury approver pays the platform fee')->assertDontSee('Request demo fee payment');
+    $this->get(route('deals.show', $deal))
+        ->assertSee('A treasury approver pays the platform fee')
+        ->assertDontSee('Request demo fee payment');
     signInUser($lenderMaker);
     $this->get(route('deals.show', $deal))->assertSee('Waiting for the borrower to pay the platform fee');
 
     $payment = app(ManageFeePayments::class)->initiate($borrowerApprover->fresh(['membership.bank']), $deal);
     signInUser($borrowerApprover);
-    $this->get(route('deals.show', $deal))->assertSee('Payment requested')->assertSee($payment->provider_reference)->assertSee('payments:simulate');
+    $this->get(route('deals.show', $deal))
+        ->assertSee('Payment requested')
+        ->assertSee($payment->provider_reference)
+        ->assertSee('payments:simulate');
     signInUser($lenderMaker);
-    $this->get(route('deals.show', $deal))->assertDontSee($payment->provider_reference)->assertDontSee('payments:simulate');
+    $this->get(route('deals.show', $deal))
+        ->assertDontSee($payment->provider_reference)
+        ->assertDontSee('payments:simulate');
 
     signedPaymentNotification(paymentNotificationPayload($payment))->assertOk();
-    $this->get(route('deals.show', $deal))->assertSee('Send the principal, then confirm it')->assertSee('Propose settlement confirmation');
+    $this->get(route('deals.show', $deal))
+        ->assertSee('Send the principal, then confirm it')
+        ->assertSee('Propose settlement confirmation');
     signInUser($borrowerMaker);
     $this->get(route('deals.show', $deal))->assertSee('Confirm the principal was received');
     $this->post(route('confirmations.store', $deal), settlementPayload())->assertRedirect();
@@ -211,8 +267,16 @@ it('marks all of a person\'s notifications read without touching anyone else', f
     $reader = bankStaff(BankRole::Approver, $deal->borrowerBank);
     $colleague = bankStaff(BankRole::Approver, $deal->borrowerBank);
     foreach ([$reader, $colleague] as $user) {
-        $user->notify(new DealActivityNotification($deal->id, $deal->borrower_bank_id, 'settled', null, [BankRole::Approver->value]));
-        $user->notify(new DealActivityNotification($deal->id, $deal->borrower_bank_id, 'dispute.opened', null, [BankRole::Approver->value]));
+        $user->notify(
+            new DealActivityNotification($deal->id, $deal->borrower_bank_id, 'settled', null, [
+                BankRole::Approver->value,
+            ])
+        );
+        $user->notify(
+            new DealActivityNotification($deal->id, $deal->borrower_bank_id, 'dispute.opened', null, [
+                BankRole::Approver->value,
+            ])
+        );
     }
     signInUser($reader);
     $this->get(route('notifications.index'))->assertSee('Mark all as read');
@@ -226,7 +290,9 @@ it('marks all of a person\'s notifications read without touching anyone else', f
 
 it('uses readable pagination', function () {
     $maker = bankStaff(BankRole::Maker);
-    FundingRequest::factory()->count(16)->create(['bank_id' => $maker->membership->bank_id, 'created_by' => $maker->id]);
+    FundingRequest::factory()
+        ->count(16)
+        ->create(['bank_id' => $maker->membership->bank_id, 'created_by' => $maker->id]);
     signInUser($maker);
 
     $this->get(route('funding.index'))->assertOk()->assertSee('Showing 1–15 of 16')->assertSee('Next');
@@ -240,3 +306,24 @@ function unlockedDealFor(User $approver): Deal
 
     return $deal->fresh();
 }
+
+test('a rendered time can be followed directly by punctuation', function (string $attributes, string $expected) {
+    expect(Blade::render("Due <x-when at=\"2026-11-03 17:52:00\" {$attributes} />."))->toContain($expected);
+})->with([
+    'date and time' => ['', '03 Nov 2026, 17:52 UTC</time>.'],
+    'date only' => ['date-only', '03 Nov 2026</time>.'],
+]);
+
+test('the compact stepper summary names the step in focus', function (array $states, string $expected) {
+    $steps = array_map(
+        fn (string $state, int $index): array => ['label' => 'Stage '.($index + 1), 'state' => $state],
+        $states,
+        array_keys($states),
+    );
+
+    expect(Blade::render('<x-stepper :steps="$steps" />', ['steps' => $steps]))->toContain($expected);
+})->with([
+    'in progress' => [['done', 'current', 'upcoming'], 'Step 2 of 3: Stage 2'],
+    'stopped' => [['done', 'stopped', 'upcoming'], 'Step 2 of 3: Stage 2'],
+    'all complete' => [['done', 'done', 'done'], 'Step 3 of 3: Stage 3'],
+]);

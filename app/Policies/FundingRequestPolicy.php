@@ -24,9 +24,11 @@ class FundingRequestPolicy
     public function view(User $user, FundingRequest $fundingRequest): Response
     {
         $owned = $user->hasVerifiedBankAccess() && $user->membership->bank_id === $fundingRequest->bank_id;
+        $closedToOthers = [FundingRequestStatus::Selected, FundingRequestStatus::Settled];
+        $isSelectedLender = in_array($fundingRequest->status, $closedToOthers, true)
+            && $fundingRequest->deal?->lender_bank_id === $user->membership?->bank_id;
         $published = $user->canBrowseMarketplace()
-            && ($fundingRequest->currentStatus() === FundingRequestStatus::Open
-                || (in_array($fundingRequest->status, [FundingRequestStatus::Selected, FundingRequestStatus::Settled], true) && $fundingRequest->deal?->lender_bank_id === $user->membership->bank_id))
+            && ($fundingRequest->currentStatus() === FundingRequestStatus::Open || $isSelectedLender)
             && $fundingRequest->bank->status === BankStatus::Verified && $fundingRequest->bank->can_borrow;
 
         return $owned || $published ? Response::allow() : Response::denyAsNotFound();
@@ -34,7 +36,9 @@ class FundingRequestPolicy
 
     public function create(User $user): bool
     {
-        return $user->hasVerifiedBankAccess() && $user->membership->bank->can_borrow && $user->hasBankRole(BankRole::Maker);
+        return $user->hasVerifiedBankAccess()
+            && $user->membership->bank->can_borrow
+            && $user->hasBankRole(BankRole::Maker);
     }
 
     public function submit(User $user, FundingRequest $fundingRequest): bool

@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\ApprovalStatus;
 use App\BankRole;
 use App\Models\BankMembership;
 use App\Models\Deal;
@@ -21,13 +22,16 @@ class SettlementConfirmationFactory extends Factory
             'bank_id' => fn (array $a): int => Deal::query()->findOrFail($a['deal_id'])->borrower_bank_id,
             'proposed_by' => function (array $a): int {
                 $user = User::factory()->create();
-                BankMembership::factory()->for($user)->create(['bank_id' => $a['bank_id'], 'roles' => [BankRole::Maker->value]]);
+                BankMembership::factory()
+                    ->for($user)
+                    ->create(['bank_id' => $a['bank_id'], 'roles' => [BankRole::Maker->value]]);
 
                 return $user->id;
             },
-            'settlement_instruction_id' => fn (array $a): string => Deal::query()->findOrFail($a['deal_id'])->settlement_instruction_id,
+            'settlement_instruction_id' => fn (array $a): string => Deal::query()
+                ->findOrFail($a['deal_id'])->settlement_instruction_id,
             'settlement_at' => now(), 'reference' => 'SYNTHETIC-TRANSFER-'.fake()->unique()->numerify('######'),
-            'note' => 'Synthetic institution attestation.', 'status' => 'pending',
+            'note' => 'Synthetic institution attestation.', 'status' => ApprovalStatus::Pending,
             'pending_slot' => fn (array $a): string => $a['deal_id'].':'.$a['bank_id']];
     }
 }

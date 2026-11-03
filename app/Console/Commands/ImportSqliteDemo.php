@@ -17,13 +17,26 @@ class ImportSqliteDemo extends Command
         try {
             $counts = $action->handle($this->argument('source'), (bool) $this->option('dry-run'));
         } catch (Throwable $exception) {
-            $this->error($exception instanceof \RuntimeException && ! $exception instanceof \PDOException ? $exception->getMessage() : 'Import failed. No target changes were committed.');
+            $this->error(
+                $exception instanceof \RuntimeException && ! $exception instanceof \PDOException
+                    ? $exception->getMessage()
+                    : 'Import failed. No target changes were committed.'
+            );
 
             return self::FAILURE;
         }
-        $this->table(['Table', 'Rows'], collect($counts)->map(fn (int $count, string $table): array => [$table, $count])->values()->all());
-        $this->info($this->option('dry-run') ? 'Source validated. No target rows were written.' : 'Demo history copied. The SQLite source is unchanged.');
-        $this->line('Sessions, password-reset tokens and cache are excluded. Sign in again. Private files and the existing application key must be retained.');
+        $this->table(
+            ['Table', 'Rows'],
+            collect($counts)->map(fn (int $count, string $table): array => [$table, $count])->values()->all(),
+        );
+        $this->info(
+            $this->option('dry-run')
+                ? 'Source validated. No target rows were written.'
+                : 'Demo history copied. The SQLite source is unchanged.'
+        );
+        $this->line(
+            'Sessions, password-reset tokens and cache are excluded. Sign in again. Private files and the existing application key must be retained.'
+        );
 
         return self::SUCCESS;
     }

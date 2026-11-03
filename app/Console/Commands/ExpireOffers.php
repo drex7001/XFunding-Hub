@@ -17,7 +17,9 @@ class ExpireOffers extends Command
     public function handle(ManageOffers $action): int
     {
         $expired = 0;
-        Offer::query()->whereIn('status', [OfferStatus::Active, OfferStatus::PendingApproval])->where('valid_until', '<=', now())
+        Offer::query()
+            ->whereIn('status', [OfferStatus::Active, OfferStatus::PendingApproval])
+            ->where('valid_until', '<=', now())
             ->chunkById(100, function (Collection $offers) use ($action, &$expired): void {
                 foreach ($offers as $offer) {
                     if ($action->expire($offer)) {

@@ -18,7 +18,10 @@ it('stores onboarding PDFs privately and audits their upload', function () {
 
     $document = BankDocument::query()->sole();
     Storage::disk('private')->assertExists($document->path);
-    $this->assertDatabaseHas('audit_events', ['action' => 'document.uploaded', 'bank_id' => $admin->membership->bank_id]);
+    $this->assertDatabaseHas('audit_events', [
+        'action' => 'document.uploaded',
+        'bank_id' => $admin->membership->bank_id,
+    ]);
 });
 
 it('rejects invalid or oversized onboarding documents with 422', function (string $name, int $size, string $mime) {
@@ -26,7 +29,11 @@ it('rejects invalid or oversized onboarding documents with 422', function (strin
     $admin = bankStaff(BankRole::Admin, Bank::factory()->create());
     signInUser($admin);
 
-    $this->postJson(route('documents.store', $admin->membership->bank), ['document' => UploadedFile::fake()->create($name, $size, $mime)])->assertUnprocessable()->assertJsonValidationErrors('document');
+    $this->postJson(route('documents.store', $admin->membership->bank), [
+        'document' => UploadedFile::fake()->create($name, $size, $mime),
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('document');
 
     $this->assertDatabaseCount('bank_documents', 0);
     Storage::disk('private')->assertDirectoryEmpty('/');
@@ -39,7 +46,9 @@ it('downloads an owning banks document without caching it publicly', function ()
     Storage::disk('private')->put($document->path, 'private document');
     signInUser($user);
 
-    $this->get(route('documents.show', $document))->assertDownload('audit-report.pdf')->assertHeader('Cache-Control', 'no-store, private');
+    $this->get(route('documents.show', $document))
+        ->assertDownload('audit-report.pdf')
+        ->assertHeader('Cache-Control', 'no-store, private');
 
     $this->assertDatabaseHas('audit_events', ['action' => 'document.downloaded', 'actor_id' => $user->id]);
 });
@@ -70,7 +79,8 @@ it('records a platform reviewers document access reason', function () {
     Storage::disk('private')->put($document->path, 'private document');
     signInUser(User::factory()->platformAdmin()->create());
 
-    $this->get(route('documents.show', ['document' => $document, 'reason' => 'Review onboarding evidence']))->assertDownload();
+    $this->get(route('documents.show', ['document' => $document, 'reason' => 'Review onboarding evidence']))
+        ->assertDownload();
 
     $event = AuditEvent::query()->sole();
     expect($event->context)->toBe(['reason' => 'Review onboarding evidence']);
@@ -81,7 +91,9 @@ it('freezes onboarding document uploads after verification with 403', function (
     $admin = bankStaff(BankRole::Admin);
     signInUser($admin);
 
-    $this->postJson(route('documents.store', $admin->membership->bank), ['document' => UploadedFile::fake()->create('audit.pdf', 10, 'application/pdf')])->assertForbidden();
+    $this->postJson(route('documents.store', $admin->membership->bank), [
+        'document' => UploadedFile::fake()->create('audit.pdf', 10, 'application/pdf'),
+    ])->assertForbidden();
 
     $this->assertDatabaseCount('bank_documents', 0);
 });

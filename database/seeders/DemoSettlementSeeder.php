@@ -20,8 +20,17 @@ class DemoSettlementSeeder extends Seeder
         if ($maker === null || ! $maker->hasVerifiedBankAccess() || ! $maker->hasBankRole(BankRole::Maker)) {
             return;
         }
-        $deal = Deal::query()->where('borrower_bank_id', $maker->membership->bank_id)->where('status', DealStatus::Unlocked)
-            ->with(['borrowerBank', 'lenderBank', 'settlementInstruction.bank', 'verifiedPayment.verifiedReceipt', 'pendingInstructionChange', 'fundingRequest'])
+        $deal = Deal::query()
+            ->where('borrower_bank_id', $maker->membership->bank_id)
+            ->where('status', DealStatus::Unlocked)
+            ->with([
+                'borrowerBank',
+                'lenderBank',
+                'settlementInstruction.bank',
+                'verifiedPayment.verifiedReceipt',
+                'pendingInstructionChange',
+                'fundingRequest',
+            ])
             ->oldest()->get()->first(fn (Deal $record): bool => $record->settlementReady());
         if ($deal === null || $deal->confirmations()->exists()) {
             return;

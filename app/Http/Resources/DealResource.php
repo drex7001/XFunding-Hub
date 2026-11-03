@@ -27,29 +27,62 @@ class DealResource extends JsonResource
             'feeConfigured' => $this->hasFeeQuote(), 'identityUnlocked' => $this->hasVerifiedFee(),
             'fee' => $this->hasFeeQuote() ? [
                 'amount' => FundingRequest::formatMinor($this->fee_amount_minor), 'currency' => $this->fee_currency,
-                'baseAmount' => FundingRequest::formatMinor($this->fee_policy['baseMinor']), 'taxAmount' => FundingRequest::formatMinor($this->fee_policy['taxMinor']),
-                'basisPoints' => $this->fee_policy['basisPoints'], 'taxBasisPoints' => $this->fee_policy['taxBasisPoints'],
-                'mode' => $this->fee_policy['mode'], 'policyVersion' => $this->fee_policy['version'], 'deadline' => $this->fee_deadline->toIso8601String(),
+                'baseAmount' => FundingRequest::formatMinor($this->fee_policy['baseMinor']),
+                'taxAmount' => FundingRequest::formatMinor($this->fee_policy['taxMinor']),
+                'basisPoints' => $this->fee_policy['basisPoints'],
+                'taxBasisPoints' => $this->fee_policy['taxBasisPoints'],
+                'mode' => $this->fee_policy['mode'],
+                'policyVersion' => $this->fee_policy['version'],
+                'deadline' => $this->fee_deadline->toIso8601String(),
             ] : null,
             'settlement' => [
-                'borrower' => $this->confirmations->first(fn (SettlementConfirmation $record): bool => $record->bank_id === $this->borrower_bank_id && $record->settlement_instruction_id === $this->settlement_instruction_id && in_array($record->status, ['pending', 'approved'], true))?->status ?? 'not_submitted',
-                'lender' => $this->confirmations->first(fn (SettlementConfirmation $record): bool => $record->bank_id === $this->lender_bank_id && $record->settlement_instruction_id === $this->settlement_instruction_id && in_array($record->status, ['pending', 'approved'], true))?->status ?? 'not_submitted',
-                'settledAt' => $this->settled_at?->toIso8601String(), 'closedUnsettledAt' => $this->closed_unsettled_at?->toIso8601String(),
+                'borrower' => $this->confirmations->first(
+                    fn (SettlementConfirmation $record): bool => $record->bank_id === $this->borrower_bank_id
+                        && $record->settlement_instruction_id === $this->settlement_instruction_id
+                        && $record->isCurrent()
+                )?->status->value
+                    ?? 'not_submitted',
+                'lender' => $this->confirmations->first(
+                    fn (SettlementConfirmation $record): bool => $record->bank_id === $this->lender_bank_id
+                        && $record->settlement_instruction_id === $this->settlement_instruction_id
+                        && $record->isCurrent()
+                )?->status->value
+                    ?? 'not_submitted',
+                'settledAt' => $this->settled_at?->toIso8601String(),
+                'closedUnsettledAt' => $this->closed_unsettled_at?->toIso8601String(),
                 'disputeOpen' => $this->activeDispute !== null,
             ],
             'instructionsUpdatedAt' => $this->instructions_updated_at?->toIso8601String(),
             'instructionReviewPending' => $this->pendingInstructionChange !== null,
             'receivingInstructionsRecorded' => $this->borrower_settlement_instruction_id !== null,
-            'can' => ['initiatePayment' => $payable, 'viewSettlement' => Gate::allows('viewSettlement', $this->resource),
-                'proposeConfirmation' => Gate::allows('create', [SettlementConfirmation::class, $this->resource]) && $this->settlementReady()
-                    && ! $this->confirmations->contains(fn (SettlementConfirmation $record): bool => $record->bank_id === $request->user()->membership?->bank_id && in_array($record->status, ['pending', 'approved'], true)),
-                'openDispute' => Gate::allows('create', [DealDispute::class, $this->resource]) && $this->status === DealStatus::Unlocked && $this->hasVerifiedFee(),
+            'can' => [
+                'initiatePayment' => $payable,
+                'viewSettlement' => Gate::allows('viewSettlement', $this->resource),
+                'proposeConfirmation' => Gate::allows('create', [SettlementConfirmation::class, $this->resource])
+                    && $this->settlementReady()
+                    && ! $this->confirmations->contains(
+                        fn (SettlementConfirmation $record): bool => $record->bank_id === $viewerBankId
+                            && $record->isCurrent()
+                    ),
+                'openDispute' => Gate::allows('create', [DealDispute::class, $this->resource])
+                    && $this->status === DealStatus::Unlocked
+                    && $this->hasVerifiedFee(),
             ],
         ];
         $viewerSide = $this->sideOf($viewerBankId);
         $change = $this->pendingInstructionChange;
-        if ($viewerSide !== null && ($change === null || $change->side === $viewerSide) && Gate::allows('viewAny', SettlementInstruction::class)) {
-            $data['instructionChange'] = $change ? ['id' => $change->id, 'version' => $change->settlementInstruction->version, 'canReview' => Gate::allows('review', $change)] : null;
+        if (
+            $viewerSide !== null
+            && ($change === null || $change->side === $viewerSide)
+            && Gate::allows('viewAny', SettlementInstruction::class)
+        ) {
+            $data['instructionChange'] = $change
+                ? [
+                    'id' => $change->id,
+                    'version' => $change->settlementInstruction->version,
+                    'canReview' => Gate::allows('review', $change),
+                ]
+                : null;
         }
 
         return $data;

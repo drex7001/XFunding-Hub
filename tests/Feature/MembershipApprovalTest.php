@@ -16,21 +16,30 @@ it('creates an access proposal without prematurely sending an invitation', funct
     signInUser($admin);
     Notification::fake();
 
-    $this->post(route('access.store'), ['name' => 'Colleague', 'email' => 'colleague@example.test', 'roles' => ['treasury_maker']])->assertRedirect();
+    $this->post(route('access.store'), [
+        'name' => 'Colleague',
+        'email' => 'colleague@example.test',
+        'roles' => ['treasury_maker'],
+    ])->assertRedirect();
 
-    $this->assertDatabaseHas('access_requests', ['bank_id' => $admin->membership->bank_id, 'requested_by' => $admin->id, 'status' => 'pending']);
+    $this->assertDatabaseHas('access_requests', [
+        'bank_id' => $admin->membership->bank_id,
+        'requested_by' => $admin->id,
+        'status' => 'pending',
+    ]);
     $this->assertDatabaseCount('bank_invitations', 0);
     Notification::assertNothingSent();
 });
 
 it('refuses self approval with 403', function () {
     $admin = bankStaff(BankRole::Admin);
-    $request = AccessRequest::factory()->create(['bank_id' => $admin->membership->bank_id, 'requested_by' => $admin->id]);
+    $request = AccessRequest::factory()
+        ->create(['bank_id' => $admin->membership->bank_id, 'requested_by' => $admin->id]);
     signInUser($admin);
 
     $this->postJson(route('access.review', $request), ['decision' => 'approve'])->assertForbidden();
 
-    expect($request->fresh()->status)->toBe('pending');
+    expect($request->fresh()->status->value)->toBe('pending');
     $this->assertDatabaseCount('bank_invitations', 0);
 });
 
@@ -58,7 +67,7 @@ it('queues an invitation after independent platform approval', function () {
 
     $this->post(route('access.review', $request), ['decision' => 'approve'])->assertRedirect();
 
-    expect($request->fresh()->status)->toBe('approved');
+    expect($request->fresh()->status->value)->toBe('approved');
     $this->assertDatabaseHas('bank_invitations', ['email' => $request->email, 'bank_id' => $request->bank_id]);
     $this->assertDatabaseMissing('users', ['email' => $request->email]);
     Notification::assertSentOnDemand(BankInvitationNotification::class);
@@ -69,7 +78,15 @@ it('applies independently approved roles and revokes previous sessions', functio
     $maker = bankStaff(bank: $bank);
     $requester = bankStaff(BankRole::Admin, $bank);
     $reviewer = bankStaff(BankRole::Admin, $bank);
-    $request = AccessRequest::factory()->create(['bank_id' => $bank->id, 'membership_id' => $maker->membership->id, 'membership_version' => 0, 'requested_by' => $requester->id, 'kind' => 'role_change', 'roles' => ['treasury_approver']]);
+    $request = AccessRequest::factory()
+        ->create([
+            'bank_id' => $bank->id,
+            'membership_id' => $maker->membership->id,
+            'membership_version' => 0,
+            'requested_by' => $requester->id,
+            'kind' => 'role_change',
+            'roles' => ['treasury_approver'],
+        ]);
     signInUser($reviewer);
 
     $this->post(route('access.review', $request), ['decision' => 'approve'])->assertRedirect();
@@ -83,7 +100,15 @@ it('refuses promotion approval by the user being promoted with 403', function ()
     $bank = Bank::factory()->create();
     $target = bankStaff(BankRole::Admin, $bank);
     $requester = bankStaff(BankRole::Admin, $bank);
-    $request = AccessRequest::factory()->create(['bank_id' => $bank->id, 'membership_id' => $target->membership->id, 'membership_version' => 0, 'requested_by' => $requester->id, 'kind' => 'role_change', 'roles' => ['bank_admin', 'treasury_approver']]);
+    $request = AccessRequest::factory()
+        ->create([
+            'bank_id' => $bank->id,
+            'membership_id' => $target->membership->id,
+            'membership_version' => 0,
+            'requested_by' => $requester->id,
+            'kind' => 'role_change',
+            'roles' => ['bank_admin', 'treasury_approver'],
+        ]);
     signInUser($target);
 
     $this->postJson(route('access.review', $request), ['decision' => 'approve'])->assertForbidden();
@@ -94,13 +119,20 @@ it('refuses promotion approval by the user being promoted with 403', function ()
 it('rejects stale role changes with 409', function () {
     $bank = Bank::factory()->create();
     $target = bankStaff(bank: $bank);
-    $request = AccessRequest::factory()->create(['bank_id' => $bank->id, 'membership_id' => $target->membership->id, 'membership_version' => 0, 'kind' => 'role_change', 'roles' => ['treasury_approver']]);
+    $request = AccessRequest::factory()
+        ->create([
+            'bank_id' => $bank->id,
+            'membership_id' => $target->membership->id,
+            'membership_version' => 0,
+            'kind' => 'role_change',
+            'roles' => ['treasury_approver'],
+        ]);
     $target->membership->forceFill(['version' => 1])->save();
     signInUser(User::factory()->platformAdmin()->create());
 
     $this->postJson(route('access.review', $request), ['decision' => 'approve'])->assertConflict();
 
-    expect($request->fresh()->status)->toBe('pending');
+    expect($request->fresh()->status->value)->toBe('pending');
     expect($target->membership->fresh()->roles)->toBe(['treasury_maker']);
 });
 
@@ -128,10 +160,17 @@ it('creates only the invited bank membership from an accepted token', function (
     $token = str_repeat('a', 64);
     $invitation = BankInvitation::factory()->create(['token_hash' => hash('sha256', $token)]);
 
-    $this->post(route('invitation.accept', $token), ['password' => 'SecureBank123!', 'password_confirmation' => 'SecureBank123!'])->assertRedirect(route('login'));
+    $this->post(route('invitation.accept', $token), [
+        'password' => 'SecureBank123!',
+        'password_confirmation' => 'SecureBank123!',
+    ])->assertRedirect(route('login'));
 
     $user = User::query()->where('email', $invitation->email)->firstOrFail();
-    $this->assertDatabaseHas('bank_memberships', ['bank_id' => $invitation->bank_id, 'user_id' => $user->id, 'active' => true]);
+    $this->assertDatabaseHas('bank_memberships', [
+        'bank_id' => $invitation->bank_id,
+        'user_id' => $user->id,
+        'active' => true,
+    ]);
     expect($user->is_platform_admin)->toBeFalse();
     expect($invitation->fresh()->accepted_at)->not->toBeNull();
 });
@@ -139,7 +178,12 @@ it('creates only the invited bank membership from an accepted token', function (
 it('rejects expired or previously used invitation tokens with 404', function (string $state) {
     $this->freezeTime();
     $token = str_repeat('b', 64);
-    BankInvitation::factory()->create(['token_hash' => hash('sha256', $token), 'expires_at' => $state === 'expired' ? now() : now()->addDay(), 'accepted_at' => $state === 'used' ? now() : null]);
+    BankInvitation::factory()
+        ->create([
+            'token_hash' => hash('sha256', $token),
+            'expires_at' => $state === 'expired' ? now() : now()->addDay(),
+            'accepted_at' => $state === 'used' ? now() : null,
+        ]);
 
     $this->get(route('invitation.show', $token))->assertNotFound();
 })->with(['expired', 'used']);
@@ -148,7 +192,15 @@ it('rejects attempts to replace invited roles or email with 422', function () {
     $token = str_repeat('c', 64);
     $invitation = BankInvitation::factory()->create(['token_hash' => hash('sha256', $token)]);
 
-    $this->postJson(route('invitation.accept', $token), ['password' => 'SecureBank123!', 'password_confirmation' => 'SecureBank123!', 'email' => 'attacker@example.test', 'roles' => ['bank_admin'], 'is_platform_admin' => true])->assertUnprocessable()->assertJsonValidationErrors(['email', 'roles', 'is_platform_admin']);
+    $this->postJson(route('invitation.accept', $token), [
+        'password' => 'SecureBank123!',
+        'password_confirmation' => 'SecureBank123!',
+        'email' => 'attacker@example.test',
+        'roles' => ['bank_admin'],
+        'is_platform_admin' => true,
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['email', 'roles', 'is_platform_admin']);
 
     $this->assertDatabaseMissing('users', ['email' => $invitation->email]);
 });
@@ -156,7 +208,13 @@ it('rejects attempts to replace invited roles or email with 422', function () {
 it('rejects undefined roles with 422', function () {
     signInUser(bankStaff(BankRole::Admin));
 
-    $this->postJson(route('access.store'), ['name' => 'Attacker', 'email' => 'attacker@example.test', 'roles' => ['platform_admin']])->assertUnprocessable()->assertJsonValidationErrors('roles.0');
+    $this->postJson(route('access.store'), [
+        'name' => 'Attacker',
+        'email' => 'attacker@example.test',
+        'roles' => ['platform_admin'],
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('roles.0');
 
     $this->assertDatabaseCount('access_requests', 0);
 });
@@ -164,9 +222,17 @@ it('rejects undefined roles with 422', function () {
 it('rejects writes with used or expired invitation tokens with 404', function (string $state) {
     $this->freezeTime();
     $token = str_repeat('d', 64);
-    $invitation = BankInvitation::factory()->create(['token_hash' => hash('sha256', $token), 'expires_at' => $state === 'expired' ? now() : now()->addDay(), 'accepted_at' => $state === 'used' ? now() : null]);
+    $invitation = BankInvitation::factory()
+        ->create([
+            'token_hash' => hash('sha256', $token),
+            'expires_at' => $state === 'expired' ? now() : now()->addDay(),
+            'accepted_at' => $state === 'used' ? now() : null,
+        ]);
 
-    $this->postJson(route('invitation.accept', $token), ['password' => 'SecureBank123!', 'password_confirmation' => 'SecureBank123!'])->assertNotFound();
+    $this->postJson(route('invitation.accept', $token), [
+        'password' => 'SecureBank123!',
+        'password_confirmation' => 'SecureBank123!',
+    ])->assertNotFound();
 
     $this->assertDatabaseMissing('users', ['email' => $invitation->email]);
 })->with(['expired', 'used']);
@@ -188,7 +254,7 @@ it('does not send an invitation after an access request is rejected', function (
 
     $this->post(route('access.review', $request), ['decision' => 'reject'])->assertRedirect();
 
-    expect($request->fresh()->status)->toBe('rejected');
+    expect($request->fresh()->status->value)->toBe('rejected');
     $this->assertDatabaseCount('bank_invitations', 0);
     Notification::assertNothingSent();
 });
@@ -215,7 +281,11 @@ it('reinstates a revoked colleague only through independent approval and revokes
     $roles = [BankRole::Approver->value];
 
     signInUser($proposer->fresh(['membership.bank']));
-    $this->postJson(route('access.store'), ['name' => 'Returning Staff', 'email' => $colleague->email, 'roles' => $roles])->assertUnprocessable();
+    $this->postJson(route('access.store'), [
+        'name' => 'Returning Staff',
+        'email' => $colleague->email,
+        'roles' => $roles,
+    ])->assertUnprocessable();
     $this->post(route('access.reinstate', $colleague->membership), ['roles' => $roles])->assertRedirect();
     $request = AccessRequest::query()->where('kind', 'reinstatement')->sole();
     $this->post(route('access.review', $request), ['decision' => 'approve'])->assertForbidden();
@@ -226,7 +296,12 @@ it('reinstates a revoked colleague only through independent approval and revokes
     $this->post(route('access.review', $request), ['decision' => 'approve'])->assertRedirect();
 
     $membership = $colleague->membership->fresh();
-    expect($membership->active)->toBeTrue()->and($membership->roles)->toBe($roles)->and($colleague->fresh()->auth_version)->toBe($authVersion + 1);
+    expect($membership->active)
+        ->toBeTrue()
+        ->and($membership->roles)
+        ->toBe($roles)
+        ->and($colleague->fresh()->auth_version)
+        ->toBe($authVersion + 1);
     Auth::logout();
     $this->post('/login', ['email' => $colleague->email, 'password' => $password])->assertRedirect(route('dashboard'));
 });
@@ -237,6 +312,8 @@ it('refuses reinstatement for an active membership or another bank member', func
     signInUser($admin);
     $roles = [BankRole::Maker->value];
 
-    $this->postJson(route('access.reinstate', bankStaff(BankRole::Maker, $bank)->membership), ['roles' => $roles])->assertConflict();
-    $this->postJson(route('access.reinstate', bankStaff(BankRole::Maker)->membership), ['roles' => $roles])->assertNotFound();
+    $this->postJson(route('access.reinstate', bankStaff(BankRole::Maker, $bank)->membership), ['roles' => $roles])
+        ->assertConflict();
+    $this->postJson(route('access.reinstate', bankStaff(BankRole::Maker)->membership), ['roles' => $roles])
+        ->assertNotFound();
 });

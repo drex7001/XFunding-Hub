@@ -11,7 +11,7 @@
             </div>
         </div>
         <div class="row-actions">
-            @if ($accessRequest->status === 'pending')
+            @if ($accessRequest->status === \App\ApprovalStatus::Pending)
                 @can('review', $accessRequest)
                     <form method="post" action="{{ route('access.review', $accessRequest) }}" class="btn-row btn-row--flat">
                         @csrf

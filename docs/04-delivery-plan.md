@@ -163,7 +163,9 @@ An independent review of Phases 0–6 found the issues below. All of them are co
 
 **Validation — 2026-11-03:** PostgreSQL suite **492 tests / 2,188 assertions pass**. SQLite suite **480 tests / 2,123 assertions pass**, with 12 PostgreSQL-only tests skipped. A temporary sweep called every parameterised route as an unrelated bank user holding all four roles; all 82 requests were denied. A second sweep found no lender identity in ordinary borrower views before or after the fee. These changes were exercised through HTTP feature tests, not a browser walkthrough.
 
-**Still open:** long-line and status-string cleanup.
+**Cleanup — 2026-11-03:** Approval, settlement-instruction and dispute statuses are now backed enums, and PHP lines over 120 characters fell from 1,102 to 31. The remaining 31 are long strings, docblocks, command signatures and test titles, where wrapping would not help.
+
+**Still open:** Blade long lines (319 over 120 characters), `abort` calls in 12 Action classes, and 8 repeated `auth_version` checks in Actions.
 
 ## Interface and flow — 2026-11-03
 
@@ -172,8 +174,9 @@ An independent review of Phases 0–6 found the issues below. All of them are co
 - [x] Conflicts on form submissions return to the page with the reason; friendly error pages replace raw ones.
 - [x] Single-table offer comparison with one receiving-account choice, and one-step offer submission.
 - [x] Grouped money, readable dates and short references; a rewritten design system with mobile navigation and no new dependency.
+- [x] Fixes from the live click-through: no stray space or line break before punctuation after a time, a compact stepper on phones, one newest-first deal timeline, a link to settlement details once the fee unlocks them, and one `h1` on error pages.
 
-**Validation — 2026-11-03:** After the loan sample removal, the PostgreSQL suite **517 tests / 2,845 assertions pass**. SQLite suite **504 tests / 2,777 assertions pass**, with 13 PostgreSQL-only tests skipped. `RenderedFormsJourneyTest` submits only what the rendered forms contain and follows Home from draft to settled; deliberately broken fields and links made it fail. The authorization sweep (82 of 82 requests denied) and the lender-identity sweep were repeated with Home included. Screens were checked in headless-Chrome screenshots of rendered pages at desktop and mobile widths. A live click-through in a running browser has not been done.
+**Validation — 2026-11-03:** The PostgreSQL suite **522 tests / 2,850 assertions pass**. SQLite suite **509 tests / 2,782 assertions pass**, with 13 PostgreSQL-only tests skipped. `RenderedFormsJourneyTest` submits only what the rendered forms contain and follows Home from draft to settled; deliberately broken fields and links made it fail. The authorization sweep (82 of 82 requests denied) and the lender-identity sweep were repeated with Home included. Screens were checked in headless-Chrome screenshots of rendered pages at desktop and mobile widths. A live click-through then drove the running local app in headless Chrome with real clicks. Eight accounts took a synthetic request from draft to settled, toured every navigation link and checked a phone layout: all 67 checks passed, with no console errors, failed requests or horizontal overflow at 390, 768, 900 and 1280 px wide, and no lender identity in borrower pages before the fee. Other browsers and screen readers have not been tested.
 
 ## Handover for each phase
 

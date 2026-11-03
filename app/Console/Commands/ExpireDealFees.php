@@ -19,7 +19,10 @@ class ExpireDealFees extends Command
     {
         $count = 0;
         Deal::query()->where('status', DealStatus::AwaitingFee)
-            ->where(fn (Builder $query): Builder => $query->where('fee_deadline', '<=', now())->orWhere('offer_valid_until', '<=', now()))
+            ->where(
+                fn (Builder $query): Builder => $query->where('fee_deadline', '<=', now())
+                    ->orWhere('offer_valid_until', '<=', now())
+            )
             ->chunkById(100, function (Collection $deals) use ($action, &$count): void {
                 foreach ($deals as $deal) {
                     if ($action->expire($deal)) {

@@ -16,7 +16,9 @@ class PlatformAccountController extends Controller
     {
         Gate::authorize('managePlatformAccounts', User::class);
 
-        return view('platform.accounts', ['records' => User::query()->where('is_platform_admin', true)->orderBy('name')->paginate(25)]);
+        return view('platform.accounts', [
+            'records' => User::query()->where('is_platform_admin', true)->orderBy('name')->paginate(25),
+        ]);
     }
 
     public function store(StorePlatformAccountRequest $request, ManagePlatformAccounts $action): RedirectResponse
@@ -24,7 +26,9 @@ class PlatformAccountController extends Controller
         $data = $request->validated();
         $action->create($request->user(), $data['name'], $data['email'], $data['reason']);
 
-        return redirect()->route('platform-accounts.index')->with('status', 'Platform account created. A password setup link has been sent.');
+        return redirect()
+            ->route('platform-accounts.index')
+            ->with('status', 'Platform account created. A password setup link has been sent.');
     }
 
     public function deactivate(Request $request, User $account, ManagePlatformAccounts $action): RedirectResponse
@@ -33,7 +37,9 @@ class PlatformAccountController extends Controller
         $data = $request->validate(['reason' => ['required', 'string', 'min:8', 'max:500']]);
         $action->deactivate($request->user(), $account, $data['reason']);
 
-        return redirect()->route('platform-accounts.index')->with('status', 'Platform account deactivated and its sessions revoked.');
+        return redirect()
+            ->route('platform-accounts.index')
+            ->with('status', 'Platform account deactivated and its sessions revoked.');
     }
 
     public function reactivate(Request $request, User $account, ManagePlatformAccounts $action): RedirectResponse

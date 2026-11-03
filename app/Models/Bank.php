@@ -17,7 +17,13 @@ class Bank extends Model
 
     protected function casts(): array
     {
-        return ['status' => BankStatus::class, 'requested_capabilities' => 'array', 'can_borrow' => 'boolean', 'can_lend' => 'boolean', 'verified_at' => 'datetime'];
+        return [
+            'status' => BankStatus::class,
+            'requested_capabilities' => 'array',
+            'can_borrow' => 'boolean',
+            'can_lend' => 'boolean',
+            'verified_at' => 'datetime',
+        ];
     }
 
     public function memberships(): HasMany

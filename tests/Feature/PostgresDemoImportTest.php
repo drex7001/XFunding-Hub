@@ -69,7 +69,9 @@ it('preserves encrypted paid history, files, identities and PostgreSQL sequences
     expect(User::factory()->create()->id)->toBeGreaterThan($source['users']);
     expect(DB::table('sessions')->count())->toBe(0);
     signInUser(bankStaff(BankRole::Approver, $deal->borrowerBank));
-    $this->getJson(route('api.deals.settlement', $deal))->assertOk()->assertJsonPath('data.instructions.accountNumber', 'DEMO000012345678');
+    $this->getJson(route('api.deals.settlement', $deal))
+        ->assertOk()
+        ->assertJsonPath('data.instructions.accountNumber', 'DEMO000012345678');
 });
 
 it('ignores the retired loan sample table in an older snapshot', function () {
@@ -108,7 +110,8 @@ it('refuses import into a target with existing users without overwriting either 
     Storage::fake('private');
     $source = sqliteDemoSource();
     $existing = User::factory()->create();
-    expect(fn () => app(CopySqliteDemoToPostgres::class)->handle($source['path']))->toThrow(RuntimeException::class, 'must be empty');
+    expect(fn () => app(CopySqliteDemoToPostgres::class)->handle($source['path']))
+        ->toThrow(RuntimeException::class, 'must be empty');
     expect(User::query()->sole()->id)->toBe($existing->id);
     expect(hash_file('sha256', $source['path']))->toBe($source['hash']);
 });
@@ -122,7 +125,8 @@ it('rolls back import when the application key cannot decrypt source records', f
     app()->instance('encrypter', new Encrypter(str_repeat('x', 32), 'AES-256-CBC'));
     Crypt::clearResolvedInstance('encrypter');
 
-    expect(fn () => app(CopySqliteDemoToPostgres::class)->handle($source['path']))->toThrow(RuntimeException::class, 'does not decrypt');
+    expect(fn () => app(CopySqliteDemoToPostgres::class)->handle($source['path']))
+        ->toThrow(RuntimeException::class, 'does not decrypt');
     expect(User::query()->count())->toBe(0);
 });
 
@@ -151,5 +155,6 @@ it('refuses import when the destination is not PostgreSQL', function () {
         config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:']);
         DB::purge('sqlite');
     }
-    expect(fn () => app(CopySqliteDemoToPostgres::class)->handle('/missing.sqlite'))->toThrow(RuntimeException::class, 'targeting PostgreSQL');
+    expect(fn () => app(CopySqliteDemoToPostgres::class)->handle('/missing.sqlite'))
+        ->toThrow(RuntimeException::class, 'targeting PostgreSQL');
 });

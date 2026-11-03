@@ -16,11 +16,19 @@ class BankAuditController extends Controller
     {
         Gate::authorize('view', $bank);
         Gate::authorize('viewAudit', $bank);
-        $records = AuditEvent::query()->where('bank_id', $bank->id)->with('actor.membership')->latest('id')->paginate(25);
+        $records = AuditEvent::query()
+            ->where('bank_id', $bank->id)
+            ->with('actor.membership')
+            ->latest('id')
+            ->paginate(25);
         if ($request->expectsJson() || $request->is('api/*')) {
             return AuditEventResource::collection($records);
         }
 
-        return view('banks.audit', ['bank' => $bank, 'records' => $records, 'rows' => AuditEventResource::collection($records)->resolve($request)]);
+        return view('banks.audit', [
+            'bank' => $bank,
+            'records' => $records,
+            'rows' => AuditEventResource::collection($records)->resolve($request),
+        ]);
     }
 }

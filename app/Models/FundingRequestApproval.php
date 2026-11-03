@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\ApprovalStatus;
 use Database\Factories\FundingRequestApprovalFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -16,7 +17,12 @@ class FundingRequestApproval extends Model
 
     protected function casts(): array
     {
-        return ['bank_profile' => 'array', 'expected_version' => 'integer', 'reviewed_at' => 'immutable_datetime'];
+        return [
+            'status' => ApprovalStatus::class,
+            'bank_profile' => 'array',
+            'expected_version' => 'integer',
+            'reviewed_at' => 'immutable_datetime',
+        ];
     }
 
     public function fundingRequest(): BelongsTo

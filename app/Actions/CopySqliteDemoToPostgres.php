@@ -11,7 +11,14 @@ use RuntimeException;
 
 class CopySqliteDemoToPostgres
 {
-    private const EXCLUDED = ['migrations', 'sessions', 'password_reset_tokens', 'cache', 'cache_locks', 'loan_applications'];
+    private const EXCLUDED = [
+        'migrations',
+        'sessions',
+        'password_reset_tokens',
+        'cache',
+        'cache_locks',
+        'loan_applications',
+    ];
 
     private const ENCRYPTED = [
         'settlement_instructions' => ['details'],
@@ -34,9 +41,19 @@ class CopySqliteDemoToPostgres
         $sqlite->exec('PRAGMA query_only = ON');
         $sqlite->beginTransaction();
         try {
-            $tables = $sqlite->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")->fetchAll(PDO::FETCH_COLUMN);
+            $tables = $sqlite->query("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+                ->fetchAll(PDO::FETCH_COLUMN);
             $tables = array_values(array_diff($tables, self::EXCLUDED));
-            foreach (['users', 'banks', 'funding_requests', 'deals', 'fee_payments', 'payment_receipts', 'notifications'] as $required) {
+            $requiredTables = [
+                'users',
+                'banks',
+                'funding_requests',
+                'deals',
+                'fee_payments',
+                'payment_receipts',
+                'notifications',
+            ];
+            foreach ($requiredTables as $required) {
                 if (! in_array($required, $tables, true)) {
                     throw new RuntimeException('The source must contain the complete marketplace schema.');
                 }
@@ -53,7 +70,9 @@ class CopySqliteDemoToPostgres
                     }
                     $columns[$table] = collect($schema->getColumns($table))->keyBy('name')->all();
                     if (DB::table($table)->exists()) {
-                        throw new RuntimeException('The target marketplace tables must be empty. Existing data will not be overwritten.');
+                        throw new RuntimeException(
+                            'The target marketplace tables must be empty. Existing data will not be overwritten.'
+                        );
                     }
                 }
                 $counts = [];
@@ -70,20 +89,33 @@ class CopySqliteDemoToPostgres
                                 try {
                                     Crypt::decryptString($row[$field]);
                                 } catch (DecryptException) {
-                                    throw new RuntimeException('The application key does not decrypt the source marketplace records.');
+                                    throw new RuntimeException(
+                                        'The application key does not decrypt the source marketplace records.'
+                                    );
                                 }
                             }
                         }
                         if (in_array($table, ['funding_documents', 'bank_documents'], true)) {
                             if (! Storage::disk('private')->exists($row['path'])) {
-                                throw new RuntimeException('A source document is missing from the shared private storage.');
+                                throw new RuntimeException(
+                                    'A source document is missing from the shared private storage.'
+                                );
                             }
-                            if (isset($row['sha256']) && ! hash_equals($row['sha256'], hash('sha256', Storage::disk('private')->get($row['path'])))) {
+                            if (
+                                isset($row['sha256'])
+                                && ! hash_equals(
+                                    $row['sha256'],
+                                    hash('sha256', Storage::disk('private')->get($row['path'])),
+                                )
+                            ) {
                                 throw new RuntimeException('A source document does not match its recorded checksum.');
                             }
                         }
                         foreach ($row as $name => $value) {
-                            if ($value !== null && in_array($columns[$table][$name]['type_name'], ['bool', 'boolean'], true)) {
+                            if (
+                                $value !== null
+                                && in_array($columns[$table][$name]['type_name'], ['bool', 'boolean'], true)
+                            ) {
                                 $row[$name] = (bool) $value;
                             }
                         }
@@ -111,7 +143,14 @@ class CopySqliteDemoToPostgres
                             if ($column['auto_increment']) {
                                 $wrapped = DB::connection()->getQueryGrammar()->wrapTable($table);
                                 $name = DB::connection()->getQueryGrammar()->wrap($column['name']);
-                                DB::select('select setval(pg_get_serial_sequence(?, ?), coalesce((select max('.$name.') from '.$wrapped.'), 0) + 1, false)', [$table, $column['name']]);
+                                DB::select(
+                                    'select setval(pg_get_serial_sequence(?, ?), coalesce((select max('
+                                        .$name
+                                        .') from '
+                                        .$wrapped
+                                        .'), 0) + 1, false)',
+                                    [$table, $column['name']],
+                                );
                             }
                         }
                     }
@@ -146,7 +185,9 @@ class CopySqliteDemoToPostgres
         }
         $ordered = [];
         while ($dependencies !== []) {
-            $ready = array_keys(array_filter($dependencies, fn (array $requires): bool => array_diff($requires, $ordered) === []));
+            $ready = array_keys(
+                array_filter($dependencies, fn (array $requires): bool => array_diff($requires, $ordered) === [])
+            );
             if ($ready === []) {
                 throw new RuntimeException('The source has an unsupported circular table dependency.');
             }

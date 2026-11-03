@@ -21,12 +21,16 @@ class SettlementInstructionPolicy
 
     public function view(User $user, SettlementInstruction $instruction): Response
     {
-        return $this->viewAny($user) && $user->membership->bank_id === $instruction->bank_id ? Response::allow() : Response::denyAsNotFound();
+        return $this->viewAny($user) && $user->membership->bank_id === $instruction->bank_id
+            ? Response::allow()
+            : Response::denyAsNotFound();
     }
 
     public function review(User $user, SettlementInstruction $instruction): bool
     {
-        return $this->view($user, $instruction)->allowed() && $user->hasBankRole(BankRole::Approver) && $instruction->created_by !== $user->id;
+        return $this->view($user, $instruction)->allowed()
+            && $user->hasBankRole(BankRole::Approver)
+            && $instruction->created_by !== $user->id;
     }
 
     public function retire(User $user, SettlementInstruction $instruction): bool

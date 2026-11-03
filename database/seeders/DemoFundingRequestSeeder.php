@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Actions\ManageFundingRequests;
+use App\ApprovalStatus;
 use App\BankStatus;
 use App\Models\Bank;
 use App\Models\FundingRequest;
@@ -43,13 +44,29 @@ class DemoFundingRequestSeeder extends Seeder
                 $temporary = tempnam(sys_get_temp_dir(), 'xfunding-report-');
                 try {
                     file_put_contents($temporary, $this->demoPdf());
-                    $action->addDocument($maker, $record, new UploadedFile($temporary, 'synthetic-financial-report.pdf', 'application/pdf', UPLOAD_ERR_OK, true));
+                    $action->addDocument(
+                        $maker,
+                        $record,
+                        new UploadedFile(
+                            $temporary,
+                            'synthetic-financial-report.pdf',
+                            'application/pdf',
+                            UPLOAD_ERR_OK,
+                            true,
+                        ),
+                    );
                 } finally {
                     unlink($temporary);
                 }
                 $record = $action->submit($maker, $record);
                 if ($state === 'open') {
-                    $action->review($approver, $record, $record->approvals()->where('status', 'pending')->firstOrFail(), true, null);
+                    $action->review(
+                        $approver,
+                        $record,
+                        $record->approvals()->where('status', ApprovalStatus::Pending)->firstOrFail(),
+                        true,
+                        null,
+                    );
                 }
             }
         }

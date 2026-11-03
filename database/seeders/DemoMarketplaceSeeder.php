@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Actions\ManageOffers;
 use App\Actions\ManageSettlementInstructions;
+use App\ApprovalStatus;
 use App\BankRole;
 use App\BankStatus;
 use App\FundingRequestStatus;
@@ -14,6 +15,7 @@ use App\Models\Offer;
 use App\Models\OfferApproval;
 use App\Models\SettlementInstruction;
 use App\Models\User;
+use App\SettlementInstructionStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Gate;
@@ -28,27 +30,58 @@ class DemoMarketplaceSeeder extends Seeder
         $this->call(DemoFundingRequestSeeder::class);
         $this->additionalDemoLender();
         $this->borrowerReceivingInstructions();
-        $requests = FundingRequest::query()->whereHas('bank', fn (Builder $query): Builder => $query->where('registration_number', 'DEMO-borrower'))
-            ->whereIn('title', ['Working capital liquidity', 'Offer comparison walkthrough'])->where('status', FundingRequestStatus::Open)->where('bidding_deadline', '>', now())->get();
+        $requests = FundingRequest::query()
+            ->whereHas('bank', fn (Builder $query): Builder => $query->where('registration_number', 'DEMO-borrower'))
+            ->whereIn('title', ['Working capital liquidity', 'Offer comparison walkthrough'])
+            ->where('status', FundingRequestStatus::Open)
+            ->where('bidding_deadline', '>', now())
+            ->get();
         foreach (['lender-one' => '8.1250', 'lender-three' => '7.9000'] as $key => $rate) {
             $maker = User::query()->where('email', $key.'.maker@xfunding.example')->with('membership.bank')->first();
-            $approver = User::query()->where('email', $key.'.approver@xfunding.example')->with('membership.bank')->first();
-            if (! $maker || ! $approver || ! Gate::forUser($maker)->allows('create', SettlementInstruction::class) || ! $approver->hasBankRole(BankRole::Approver) || ! $approver->canBrowseMarketplace()) {
+            $approver = User::query()
+                ->where('email', $key.'.approver@xfunding.example')
+                ->with('membership.bank')
+                ->first();
+            if (
+                ! $maker
+                || ! $approver
+                || ! Gate::forUser($maker)->allows('create', SettlementInstruction::class)
+                || ! $approver->hasBankRole(BankRole::Approver)
+                || ! $approver->canBrowseMarketplace()
+            ) {
                 continue;
             }
-            $instruction = SettlementInstruction::query()->where('bank_id', $maker->membership->bank_id)->where('status', 'approved')->with('bank')->latest('version')->get()->first(fn (SettlementInstruction $record): bool => $record->matchesBankProfile());
+            $instruction = SettlementInstruction::query()
+                ->where('bank_id', $maker->membership->bank_id)
+                ->where('status', SettlementInstructionStatus::Approved)
+                ->with('bank')
+                ->latest('version')
+                ->get()
+                ->first(fn (SettlementInstruction $record): bool => $record->matchesBankProfile());
             if (! $instruction) {
                 $instructions = app(ManageSettlementInstructions::class);
                 $instruction = $instructions->create($maker, [
                     'channel' => 'swift', 'account_name' => $maker->membership->bank->name.' Demo Treasury',
                     'account_number' => $key === 'lender-one' ? 'DEMO000011110000' : 'DEMO000033330000',
-                    'bic' => 'DEMOLKXX', 'contact_name' => ucfirst($key).' Demo Treasury', 'contact_email' => $key.'.treasury@xfunding.example',
+                    'bic' => 'DEMOLKXX',
+                    'contact_name' => ucfirst($key).' Demo Treasury',
+                    'contact_email' => $key.'.treasury@xfunding.example',
                 ]);
-                $instruction = $instructions->review($approver, $instruction, true, 'Synthetic local demonstration instructions.');
+                $instruction = $instructions->review(
+                    $approver,
+                    $instruction,
+                    true,
+                    'Synthetic local demonstration instructions.',
+                );
             }
             $offers = app(ManageOffers::class);
             foreach ($requests as $request) {
-                if (Offer::query()->where('bank_id', $maker->membership->bank_id)->where('funding_request_id', $request->id)->exists()) {
+                if (
+                    Offer::query()
+                        ->where('bank_id', $maker->membership->bank_id)
+                        ->where('funding_request_id', $request->id)
+                        ->exists()
+                ) {
                     continue;
                 }
                 $offer = $offers->create($maker, $request, [
@@ -57,7 +90,16 @@ class DemoMarketplaceSeeder extends Seeder
                     'settlement_instruction_id' => $instruction->id,
                 ]);
                 $offers->submit($maker, $offer);
-                $offers->review($approver, $offer, OfferApproval::query()->where('offer_id', $offer->id)->where('status', 'pending')->firstOrFail(), true, null);
+                $offers->review(
+                    $approver,
+                    $offer,
+                    OfferApproval::query()
+                        ->where('offer_id', $offer->id)
+                        ->where('status', ApprovalStatus::Pending)
+                        ->firstOrFail(),
+                    true,
+                    null,
+                );
             }
         }
     }
@@ -65,35 +107,76 @@ class DemoMarketplaceSeeder extends Seeder
     private function borrowerReceivingInstructions(): void
     {
         $maker = User::query()->where('email', 'borrower.maker@xfunding.example')->with('membership.bank')->first();
-        $approver = User::query()->where('email', 'borrower.approver@xfunding.example')->with('membership.bank')->first();
-        if (! $maker || ! $approver || ! Gate::forUser($maker)->allows('create', SettlementInstruction::class) || ! $approver->hasBankRole(BankRole::Approver)) {
+        $approver = User::query()
+            ->where('email', 'borrower.approver@xfunding.example')
+            ->with('membership.bank')
+            ->first();
+        if (
+            ! $maker
+            || ! $approver
+            || ! Gate::forUser($maker)->allows('create', SettlementInstruction::class)
+            || ! $approver->hasBankRole(BankRole::Approver)
+        ) {
             return;
         }
         $bankId = $maker->membership->bank_id;
-        $hasCurrentVersion = SettlementInstruction::query()->where('bank_id', $bankId)->where('status', 'approved')->with('bank')->get()
+        $hasCurrentVersion = SettlementInstruction::query()
+            ->where('bank_id', $bankId)
+            ->where('status', SettlementInstructionStatus::Approved)
+            ->with('bank')
+            ->get()
             ->contains(fn (SettlementInstruction $record): bool => $record->matchesBankProfile());
         if ($hasCurrentVersion) {
             return;
         }
         $instructions = app(ManageSettlementInstructions::class);
         $instruction = $instructions->create($maker, [
-            'channel' => 'swift', 'account_name' => $maker->membership->bank->name.' Demo Treasury', 'account_number' => 'DEMO000022220000',
-            'bic' => 'DEMOLKXX', 'contact_name' => 'Borrower Demo Treasury', 'contact_email' => 'borrower.treasury@xfunding.example',
+            'channel' => 'swift',
+            'account_name' => $maker->membership->bank->name.' Demo Treasury',
+            'account_number' => 'DEMO000022220000',
+            'bic' => 'DEMOLKXX',
+            'contact_name' => 'Borrower Demo Treasury',
+            'contact_email' => 'borrower.treasury@xfunding.example',
         ]);
         $instructions->review($approver, $instruction, true, 'Synthetic local demonstration instructions.');
     }
 
     private function additionalDemoLender(): void
     {
-        $bank = Bank::query()->firstOrCreate(['registration_number' => 'DEMO-lender-three'], ['name' => 'Meridian Bank (Demo)', 'country_code' => 'LK', 'requested_capabilities' => ['lender']]);
+        $bank = Bank::query()
+            ->firstOrCreate(['registration_number' => 'DEMO-lender-three'], [
+                'name' => 'Meridian Bank (Demo)',
+                'country_code' => 'LK',
+                'requested_capabilities' => ['lender'],
+            ]);
         if ($bank->wasRecentlyCreated) {
-            $bank->forceFill(['status' => BankStatus::Verified, 'can_lend' => true, 'can_borrow' => false, 'verified_at' => now()])->save();
+            $bank->forceFill([
+                'status' => BankStatus::Verified,
+                'can_lend' => true,
+                'can_borrow' => false,
+                'verified_at' => now(),
+            ])->save();
         }
-        foreach (['admin' => BankRole::Admin, 'maker' => BankRole::Maker, 'approver' => BankRole::Approver, 'auditor' => BankRole::Auditor] as $suffix => $role) {
-            $user = User::query()->firstOrCreate(['email' => 'lender-three.'.$suffix.'@xfunding.example'], ['name' => 'Lender-three '.ucfirst($suffix), 'password' => 'DemoBank123!']);
+        $roles = [
+            'admin' => BankRole::Admin,
+            'maker' => BankRole::Maker,
+            'approver' => BankRole::Approver,
+            'auditor' => BankRole::Auditor,
+        ];
+        foreach ($roles as $suffix => $role) {
+            $user = User::query()
+                ->firstOrCreate(['email' => 'lender-three.'.$suffix.'@xfunding.example'], [
+                    'name' => 'Lender-three '.ucfirst($suffix),
+                    'password' => 'DemoBank123!',
+                ]);
             if ($user->wasRecentlyCreated) {
                 $user->forceFill(['email_verified_at' => now()])->save();
-                BankMembership::create(['user_id' => $user->id, 'bank_id' => $bank->id, 'roles' => [$role->value], 'active' => true]);
+                BankMembership::create([
+                    'user_id' => $user->id,
+                    'bank_id' => $bank->id,
+                    'roles' => [$role->value],
+                    'active' => true,
+                ]);
             }
         }
     }

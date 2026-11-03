@@ -18,14 +18,17 @@ class QuotePendingDealFees extends Command
     public function handle(QuotePlatformFee $quotes, ManageFeePayments $payments): int
     {
         $count = 0;
-        Deal::query()->where('status', DealStatus::AwaitingFee)->whereNull('fee_amount_minor')->chunkById(100, function (Collection $deals) use ($quotes, $payments, &$count): void {
-            foreach ($deals as $deal) {
-                if ($quotes->handle($deal)) {
-                    $count++;
-                    $payments->expire($deal->fresh());
+        Deal::query()->where('status', DealStatus::AwaitingFee)->whereNull('fee_amount_minor')->chunkById(
+            100,
+            function (Collection $deals) use ($quotes, $payments, &$count): void {
+                foreach ($deals as $deal) {
+                    if ($quotes->handle($deal)) {
+                        $count++;
+                        $payments->expire($deal->fresh());
+                    }
                 }
-            }
-        });
+            },
+        );
         $this->info("Prepared {$count} fee quote(s).");
 
         return self::SUCCESS;

@@ -101,7 +101,7 @@
                     <span class="doc-icon">PDF</span>
                     <div class="row__text">
                         <strong>{{ $document->original_name }}</strong>
-                        <small>{{ number_format($document->size / 1024) }} KB · <x-when :at="$document->created_at" date-only /></small>
+                        <small>{{ number_format(max(1, $document->size / 1024)) }} KB · <x-when :at="$document->created_at" date-only /></small>
                     </div>
                     @if ($user->is_platform_admin)
                         <form class="row-form" method="get" action="{{ route('documents.show', $document) }}">

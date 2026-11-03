@@ -19,16 +19,27 @@ class AccessRequestController extends Controller
         return back()->with('status', 'Invitation submitted for independent approval.');
     }
 
-    public function roles(StoreAccessRequest $request, BankMembership $membership, ManageBankAccess $action): RedirectResponse
-    {
+    public function roles(
+        StoreAccessRequest $request,
+        BankMembership $membership,
+        ManageBankAccess $action,
+    ): RedirectResponse {
         $action->propose($request->user(), $request->user()->membership->bank, $request->validated(), $membership);
 
         return back()->with('status', 'Role change submitted for independent approval.');
     }
 
-    public function reinstate(StoreAccessRequest $request, BankMembership $membership, ManageBankAccess $action): RedirectResponse
-    {
-        $action->proposeReinstatement($request->user(), $request->user()->membership->bank, $request->validated(), $membership);
+    public function reinstate(
+        StoreAccessRequest $request,
+        BankMembership $membership,
+        ManageBankAccess $action,
+    ): RedirectResponse {
+        $action->proposeReinstatement(
+            $request->user(),
+            $request->user()->membership->bank,
+            $request->validated(),
+            $membership,
+        );
 
         return back()->with('status', 'Reinstatement submitted for independent approval.');
     }
@@ -39,7 +50,8 @@ class AccessRequestController extends Controller
         $data = $request->validate(['decision' => ['required', 'in:approve,reject']]);
         $action->review($request->user(), $accessRequest, $data['decision'] === 'approve');
 
-        return back()->with('status', 'Access request '.($data['decision'] === 'approve' ? 'approved' : 'rejected').'.');
+        return back()
+            ->with('status', 'Access request '.($data['decision'] === 'approve' ? 'approved' : 'rejected').'.');
     }
 
     public function revoke(Request $request, BankMembership $membership, ManageBankAccess $action): RedirectResponse

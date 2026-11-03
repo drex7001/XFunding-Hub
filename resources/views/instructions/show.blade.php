@@ -13,7 +13,7 @@
             <p>Check the account below, then record your independent decision.</p>
             <x-decision-form :action="route('instructions.review', $record)" approve="Approve instructions" reject="Reject version" id="reason" />
         </x-next-step>
-    @elseif ($record->status === 'pending')
+    @elseif ($record->status === \App\SettlementInstructionStatus::Pending)
         <x-next-step tone="waiting" title="Independent approval is pending">
             <p>A different treasury approver must review this version.</p>
         </x-next-step>
@@ -33,7 +33,7 @@
         </section>
         <section class="panel">
             <h2>Review</h2>
-            @if ($record->status === 'pending')
+            @if ($record->status === \App\SettlementInstructionStatus::Pending)
                 <p class="empty-line">The review for this version has not been recorded yet.</p>
             @else
                 <p class="muted">The review for this version is complete.</p>

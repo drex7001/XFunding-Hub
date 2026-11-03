@@ -37,29 +37,45 @@ it('reserves one anonymous winner and closes every losing offer after independen
     $pending = Offer::factory()->pending()->create(['funding_request_id' => $request->id]);
     $pendingApproval = OfferApproval::factory()->create(['offer_id' => $pending->id]);
     signInUser($borrower);
-    $proposalId = $this->postJson(route('api.selection.store', $request), ['offer_token' => $winner->borrower_token, 'settlement_instruction_id' => receivingInstructionId($request)])->assertCreated()->json('data.id');
+    $proposalId = $this->postJson(route('api.selection.store', $request), [
+        'offer_token' => $winner->borrower_token,
+        'settlement_instruction_id' => receivingInstructionId($request),
+    ])
+        ->assertCreated()
+        ->json('data.id');
     expect($request->fresh()->status)->toBe(FundingRequestStatus::Open);
     signInUser(bankStaff(BankRole::Approver, $borrower->membership->bank));
-    $response = $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposalId]), ['decision' => 'approve'])
+    $response = $this->postJson(
+        route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposalId]),
+        ['decision' => 'approve'],
+    )
         ->assertOk()->assertJsonPath('data.status', 'awaiting_fee')->assertJsonPath('data.identityUnlocked', false)
-        ->assertJsonPath('data.feeConfigured', false)->assertJsonPath('data.terms.rate', '8.1250')->assertJsonPath('data.terms.label', 'Offer 1');
-    expect($response->getContent())->not->toContain('Secret Winning Lender')->not->toContain($winner->id)->not->toContain($winner->settlement_instruction_id)->not->toContain('DEMO000012345678');
+        ->assertJsonPath('data.feeConfigured', false)
+        ->assertJsonPath('data.terms.rate', '8.1250')
+        ->assertJsonPath('data.terms.label', 'Offer 1');
+    expect($response->getContent())->not->toContain('Secret Winning Lender')->not->toContain($winner->id)->not->toContain(
+        $winner->settlement_instruction_id
+    )->not->toContain('DEMO000012345678');
     expect($request->fresh()->status)->toBe(FundingRequestStatus::Selected);
     expect($winner->fresh()->status)->toBe(OfferStatus::Selected);
     expect($loser->fresh()->status)->toBe(OfferStatus::Unsuccessful);
     expect($loser->fresh()->active_slot)->toBeNull();
     expect($pending->fresh()->status)->toBe(OfferStatus::Unsuccessful);
-    expect($pendingApproval->fresh()->status)->toBe('superseded');
+    expect($pendingApproval->fresh()->status->value)->toBe('superseded');
     $deal = Deal::query()->sole();
     expect($deal->instruction_snapshot['details']['account_number'])->toBe('DEMO000012345678');
     expect(DB::table('deals')->value('instruction_snapshot'))->not->toContain('DEMO000012345678');
-    $this->assertDatabaseHas('audit_events', ['action' => 'selection.approved', 'bank_id' => $borrower->membership->bank_id]);
+    $this->assertDatabaseHas('audit_events', [
+        'action' => 'selection.approved',
+        'bank_id' => $borrower->membership->bank_id,
+    ]);
 });
 
 it('enforces borrower selection roles at the policy boundary', function (BankRole $role) {
     $user = bankStaff($role);
     $request = FundingRequest::factory()->published()->create(['bank_id' => $user->membership->bank_id]);
-    $proposal = SelectionProposal::factory()->create(['funding_request_id' => $request->id, 'offer_id' => marketOffer(bankStaff(), $request)->id]);
+    $proposal = SelectionProposal::factory()
+        ->create(['funding_request_id' => $request->id, 'offer_id' => marketOffer(bankStaff(), $request)->id]);
     $gate = Gate::forUser($user);
 
     expect($gate->allows('viewAny', [SelectionProposal::class, $request]))->toBeTrue();
@@ -72,10 +88,13 @@ it('rejects selection self approval even with combined roles with 403', function
     $borrower->membership->update(['roles' => ['treasury_maker', 'treasury_approver']]);
     $request = FundingRequest::factory()->published()->create(['bank_id' => $borrower->membership->bank_id]);
     $offer = marketOffer(bankStaff(), $request);
-    $proposal = app(SelectOffer::class)->propose($borrower->fresh(), $request, $offer->borrower_token, receivingInstructionId($request));
+    $proposal = app(SelectOffer::class)
+        ->propose($borrower->fresh(), $request, $offer->borrower_token, receivingInstructionId($request));
     signInUser($borrower->fresh());
 
-    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), ['decision' => 'approve'])->assertForbidden();
+    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), [
+        'decision' => 'approve',
+    ])->assertForbidden();
     $this->assertDatabaseCount('deals', 0);
 });
 
@@ -84,12 +103,20 @@ it('rejects a second pending selection and replayed completed approval with 409'
     $request = FundingRequest::factory()->published()->create(['bank_id' => $borrower->membership->bank_id]);
     $first = marketOffer(bankStaff(), $request);
     $second = marketOffer(bankStaff(), $request);
-    $proposal = app(SelectOffer::class)->propose($borrower, $request, $first->borrower_token, receivingInstructionId($request));
+    $proposal = app(SelectOffer::class)
+        ->propose($borrower, $request, $first->borrower_token, receivingInstructionId($request));
     signInUser($borrower);
-    $this->postJson(route('api.selection.store', $request), ['offer_token' => $second->borrower_token, 'settlement_instruction_id' => receivingInstructionId($request)])->assertConflict();
+    $this->postJson(route('api.selection.store', $request), [
+        'offer_token' => $second->borrower_token,
+        'settlement_instruction_id' => receivingInstructionId($request),
+    ])->assertConflict();
     signInUser(bankStaff(BankRole::Approver, $borrower->membership->bank));
-    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), ['decision' => 'approve'])->assertOk();
-    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), ['decision' => 'approve'])->assertConflict();
+    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), [
+        'decision' => 'approve',
+    ])->assertOk();
+    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), [
+        'decision' => 'approve',
+    ])->assertConflict();
     $this->assertDatabaseCount('deals', 1);
 });
 
@@ -99,16 +126,26 @@ it('enforces a single pending selection slot in the database', function () {
     $second = marketOffer(bankStaff(), $request);
     SelectionProposal::factory()->create(['funding_request_id' => $request->id, 'offer_id' => $first->id]);
 
-    expect(fn () => SelectionProposal::factory()->create(['funding_request_id' => $request->id, 'offer_id' => $second->id]))->toThrow(QueryException::class);
+    expect(
+        fn () => SelectionProposal::factory()->create(['funding_request_id' => $request->id, 'offer_id' => $second->id])
+    )->toThrow(QueryException::class);
 });
 
 it('hides selection comparison and approvals from unrelated banks and platform staff with 404', function () {
     $borrower = bankStaff();
     $request = FundingRequest::factory()->published()->create(['bank_id' => $borrower->membership->bank_id]);
-    $proposal = app(SelectOffer::class)->propose($borrower, $request, marketOffer(bankStaff(), $request)->borrower_token, receivingInstructionId($request));
+    $proposal = app(SelectOffer::class)
+        ->propose(
+            $borrower,
+            $request,
+            marketOffer(bankStaff(), $request)->borrower_token,
+            receivingInstructionId($request),
+        );
     signInUser(bankStaff(BankRole::Approver));
     $this->getJson(route('api.funding.offers', $request))->assertNotFound();
-    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), ['decision' => 'approve'])->assertNotFound();
+    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), [
+        'decision' => 'approve',
+    ])->assertNotFound();
     signInUser(User::factory()->platformAdmin()->create());
     $this->getJson(route('api.funding.offers', $request))->assertNotFound();
 });
@@ -119,7 +156,10 @@ it('does not accept an anonymous token from a different request with 404', funct
     $foreignOffer = Offer::factory()->active()->create();
     signInUser($borrower);
 
-    $this->postJson(route('api.selection.store', $request), ['offer_token' => $foreignOffer->borrower_token, 'settlement_instruction_id' => receivingInstructionId($request)])->assertNotFound();
+    $this->postJson(route('api.selection.store', $request), [
+        'offer_token' => $foreignOffer->borrower_token,
+        'settlement_instruction_id' => receivingInstructionId($request),
+    ])->assertNotFound();
     $this->assertDatabaseCount('selection_proposals', 0);
 });
 
@@ -128,12 +168,15 @@ it('supersedes selection when its lender withdraws and refuses approval with 409
     $request = FundingRequest::factory()->published()->create(['bank_id' => $borrower->membership->bank_id]);
     $lender = bankStaff();
     $offer = marketOffer($lender, $request);
-    $proposal = app(SelectOffer::class)->propose($borrower, $request, $offer->borrower_token, receivingInstructionId($request));
+    $proposal = app(SelectOffer::class)
+        ->propose($borrower, $request, $offer->borrower_token, receivingInstructionId($request));
     app(ManageOffers::class)->withdraw($lender, $offer, 'Capacity no longer available.');
     signInUser(bankStaff(BankRole::Approver, $borrower->membership->bank));
 
-    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), ['decision' => 'approve'])->assertConflict();
-    expect($proposal->fresh()->status)->toBe('superseded');
+    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), [
+        'decision' => 'approve',
+    ])->assertConflict();
+    expect($proposal->fresh()->status->value)->toBe('superseded');
     expect($proposal->fresh()->pending_slot)->toBeNull();
     $this->assertDatabaseCount('deals', 0);
 });
@@ -142,7 +185,8 @@ it('refuses selection after eligibility or approved terms change with 409', func
     $borrower = bankStaff();
     $request = FundingRequest::factory()->published()->create(['bank_id' => $borrower->membership->bank_id]);
     $offer = marketOffer(bankStaff(), $request);
-    $proposal = app(SelectOffer::class)->propose($borrower, $request, $offer->borrower_token, receivingInstructionId($request));
+    $proposal = app(SelectOffer::class)
+        ->propose($borrower, $request, $offer->borrower_token, receivingInstructionId($request));
     match ($change) {
         'lender suspended' => $offer->bank->forceFill(['status' => BankStatus::Suspended])->save(),
         'capability removed' => $offer->bank->forceFill(['can_lend' => false])->save(),
@@ -153,21 +197,43 @@ it('refuses selection after eligibility or approved terms change with 409', func
     };
     signInUser(bankStaff(BankRole::Approver, $borrower->membership->bank));
 
-    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), ['decision' => 'approve'])->assertConflict();
+    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), [
+        'decision' => 'approve',
+    ])->assertConflict();
     $this->assertDatabaseCount('deals', 0);
     expect($request->fresh()->status)->toBe(FundingRequestStatus::Open);
-})->with(['lender suspended', 'capability removed', 'profile changed', 'offer version changed', 'offer expired', 'bidding expired']);
+})->with([
+    'lender suspended',
+    'capability removed',
+    'profile changed',
+    'offer version changed',
+    'offer expired',
+    'bidding expired',
+]);
 
 it('requires a rejection reason and permits a fresh selection after rejection', function () {
     $borrower = bankStaff();
     $request = FundingRequest::factory()->published()->create(['bank_id' => $borrower->membership->bank_id]);
     $offer = marketOffer(bankStaff(), $request);
-    $proposal = app(SelectOffer::class)->propose($borrower, $request, $offer->borrower_token, receivingInstructionId($request));
+    $proposal = app(SelectOffer::class)
+        ->propose($borrower, $request, $offer->borrower_token, receivingInstructionId($request));
     signInUser(bankStaff(BankRole::Approver, $borrower->membership->bank));
-    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), ['decision' => 'reject'])->assertUnprocessable()->assertJsonValidationErrors('reason');
-    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), ['decision' => 'reject', 'reason' => 'Review the collateral requirement.'])->assertOk()->assertJsonPath('data.status', 'rejected');
+    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), [
+        'decision' => 'reject',
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('reason');
+    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), [
+        'decision' => 'reject',
+        'reason' => 'Review the collateral requirement.',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'rejected');
     signInUser($borrower);
-    $this->postJson(route('api.selection.store', $request), ['offer_token' => $offer->borrower_token, 'settlement_instruction_id' => receivingInstructionId($request)])->assertCreated();
+    $this->postJson(route('api.selection.store', $request), [
+        'offer_token' => $offer->borrower_token,
+        'settlement_instruction_id' => receivingInstructionId($request),
+    ])->assertCreated();
     $this->assertDatabaseCount('deals', 0);
 });
 
@@ -178,10 +244,14 @@ it('prevents cancellation and selection proposals from racing with 409', functio
     signInUser($borrower);
     if ($selectFirst) {
         app(SelectOffer::class)->propose($borrower, $request, $offer->borrower_token, receivingInstructionId($request));
-        $this->postJson(route('api.funding.cancel', $request), ['reason' => 'Liquidity requirement changed.'])->assertConflict();
+        $this->postJson(route('api.funding.cancel', $request), ['reason' => 'Liquidity requirement changed.'])
+            ->assertConflict();
     } else {
         app(ManageFundingRequests::class)->proposeCancellation($borrower, $request, 'Liquidity requirement changed.');
-        $this->postJson(route('api.selection.store', $request), ['offer_token' => $offer->borrower_token, 'settlement_instruction_id' => receivingInstructionId($request)])->assertConflict();
+        $this->postJson(route('api.selection.store', $request), [
+            'offer_token' => $offer->borrower_token,
+            'settlement_instruction_id' => receivingInstructionId($request),
+        ])->assertConflict();
     }
     $this->assertDatabaseCount('deals', 0);
 })->with(['selection first' => true, 'cancellation first' => false]);
@@ -190,12 +260,13 @@ it('closes offers and pending selections when the request expires', function () 
     $borrower = bankStaff();
     $request = FundingRequest::factory()->published()->create(['bank_id' => $borrower->membership->bank_id]);
     $offer = marketOffer(bankStaff(), $request);
-    $proposal = app(SelectOffer::class)->propose($borrower, $request, $offer->borrower_token, receivingInstructionId($request));
+    $proposal = app(SelectOffer::class)
+        ->propose($borrower, $request, $offer->borrower_token, receivingInstructionId($request));
     $request->forceFill(['bidding_deadline' => now()])->save();
 
     $this->artisan('funding:expire')->expectsOutput('Expired 1 funding request(s).')->assertSuccessful();
     expect($offer->fresh()->status)->toBe(OfferStatus::Expired);
-    expect($proposal->fresh()->status)->toBe('superseded');
+    expect($proposal->fresh()->status->value)->toBe('superseded');
     expect($proposal->fresh()->pending_slot)->toBeNull();
 });
 
@@ -205,7 +276,13 @@ it('closes open offers when request cancellation is approved', function () {
     $offer = marketOffer(bankStaff(), $request);
     $action = app(ManageFundingRequests::class);
     $action->proposeCancellation($borrower, $request, 'Funding no longer required.');
-    $action->review(bankStaff(BankRole::Approver, $borrower->membership->bank), $request, $request->approvals()->sole(), true, null);
+    $action->review(
+        bankStaff(BankRole::Approver, $borrower->membership->bank),
+        $request,
+        $request->approvals()->sole(),
+        true,
+        null,
+    );
 
     expect($offer->fresh()->status)->toBe(OfferStatus::Unsuccessful);
     expect($offer->fresh()->active_slot)->toBeNull();
@@ -221,9 +298,14 @@ it('locks selected offer terms against withdrawal editing and new bids', functio
     $action->review(bankStaff(BankRole::Approver, $borrower->membership->bank), $proposal, true, null);
     signInUser($lender);
 
-    $this->postJson(route('api.offers.withdraw', $offer), ['reason' => 'Attempting to withdraw reservation.'])->assertConflict();
-    $this->patchJson(route('api.offers.update', $offer), offerPayload($offer->settlementInstruction, $request, ['rate' => '99.00']))->assertForbidden();
-    $this->postJson(route('api.offers.store', $request), offerPayload($offer->settlementInstruction, $request))->assertForbidden();
+    $this->postJson(route('api.offers.withdraw', $offer), ['reason' => 'Attempting to withdraw reservation.'])
+        ->assertConflict();
+    $this->patchJson(
+        route('api.offers.update', $offer),
+        offerPayload($offer->settlementInstruction, $request, ['rate' => '99.00']),
+    )->assertForbidden();
+    $this->postJson(route('api.offers.store', $request), offerPayload($offer->settlementInstruction, $request))
+        ->assertForbidden();
     expect($offer->fresh()->rate)->toBe('8.1250');
 });
 
@@ -235,11 +317,20 @@ it('keeps selected terms and instructions fixed when new versions are created', 
     $action = app(SelectOffer::class);
     $proposal = $action->propose($borrower, $request, $offer->borrower_token, receivingInstructionId($request));
     $deal = $action->review(bankStaff(BankRole::Approver, $borrower->membership->bank), $proposal, true, null);
-    SettlementInstruction::factory()->approved()->create(['bank_id' => $lender->membership->bank_id, 'details' => instructionPayload(['account_number' => 'NEW000012345678'])]);
+    SettlementInstruction::factory()
+        ->approved()
+        ->create([
+            'bank_id' => $lender->membership->bank_id,
+            'details' => instructionPayload(['account_number' => 'NEW000012345678']),
+        ]);
     $offer->forceFill(['rate_units' => 999999])->save();
     signInUser($borrower);
 
-    $this->getJson(route('api.deals.show', $deal))->assertOk()->assertJsonPath('data.terms.rate', '8.1250')->assertJsonMissingPath('data.instruction_snapshot')->assertJsonMissingPath('data.lender_bank_id');
+    $this->getJson(route('api.deals.show', $deal))
+        ->assertOk()
+        ->assertJsonPath('data.terms.rate', '8.1250')
+        ->assertJsonMissingPath('data.instruction_snapshot')
+        ->assertJsonMissingPath('data.lender_bank_id');
     expect($deal->fresh()->instruction_snapshot['details']['account_number'])->toBe('DEMO000012345678');
 });
 
@@ -271,11 +362,18 @@ it('does not disclose selected lender identity to borrower admin auditor or trea
     $offer = marketOffer($lender, $request);
     $maker = $role === BankRole::Maker ? $borrower : bankStaff(BankRole::Maker, $borrower->membership->bank);
     $approver = bankStaff(BankRole::Approver, $borrower->membership->bank);
-    $proposal = app(SelectOffer::class)->propose($maker, $request, $offer->borrower_token, receivingInstructionId($request));
+    $proposal = app(SelectOffer::class)
+        ->propose($maker, $request, $offer->borrower_token, receivingInstructionId($request));
     $deal = app(SelectOffer::class)->review($approver, $proposal, true, null);
     signInUser($borrower);
-    $this->getJson(route('api.deals.show', $deal))->assertOk()->assertJsonMissingPath('data.lenderBank')->assertJsonMissingPath('data.instructions');
-    $this->get(route('deals.show', $deal))->assertOk()->assertDontSee('Never Reveal Lender')->assertDontSee('DEMO000012345678');
+    $this->getJson(route('api.deals.show', $deal))
+        ->assertOk()
+        ->assertJsonMissingPath('data.lenderBank')
+        ->assertJsonMissingPath('data.instructions');
+    $this->get(route('deals.show', $deal))
+        ->assertOk()
+        ->assertDontSee('Never Reveal Lender')
+        ->assertDontSee('DEMO000012345678');
     $this->get(route('banks.show', $borrower->membership->bank))->assertOk()->assertDontSee('Never Reveal Lender');
 })->with(BankRole::cases());
 
@@ -283,7 +381,12 @@ it('enforces one deal per request even when a second write bypasses the action',
     $deal = Deal::factory()->create();
     $anotherOffer = Offer::factory()->create(['funding_request_id' => $deal->funding_request_id]);
 
-    expect(fn () => DB::transaction(fn () => Deal::factory()->create(['funding_request_id' => $deal->funding_request_id, 'offer_id' => $anotherOffer->id])))->toThrow(QueryException::class);
+    expect(
+        fn () => DB::transaction(
+            fn () => Deal::factory()
+                ->create(['funding_request_id' => $deal->funding_request_id, 'offer_id' => $anotherOffer->id])
+        )
+    )->toThrow(QueryException::class);
     $this->assertDatabaseCount('deals', 1);
 });
 
@@ -293,7 +396,14 @@ it('rejects forged selection identities and arbitrary status with 422', function
     $offer = marketOffer(bankStaff(), $request);
     signInUser($borrower);
 
-    $this->postJson(route('api.selection.store', $request), ['offer_token' => $offer->borrower_token, 'settlement_instruction_id' => receivingInstructionId($request), 'lender_bank_id' => $offer->bank_id, 'status' => 'unlocked'])->assertUnprocessable()->assertJsonValidationErrors(['lender_bank_id', 'status']);
+    $this->postJson(route('api.selection.store', $request), [
+        'offer_token' => $offer->borrower_token,
+        'settlement_instruction_id' => receivingInstructionId($request),
+        'lender_bank_id' => $offer->bank_id,
+        'status' => 'unlocked',
+    ])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['lender_bank_id', 'status']);
     $this->assertDatabaseCount('deals', 0);
 });
 
@@ -312,8 +422,12 @@ it('keeps anonymous labels local to each request and changes tokens across reque
     marketOffer($lender, $second);
     signInUser($borrower);
 
-    $firstResponse = $this->getJson(route('api.funding.offers', $first))->assertOk()->assertJsonPath('data.offers.0.label', 'Offer 1');
-    $secondResponse = $this->getJson(route('api.funding.offers', $second))->assertOk()->assertJsonPath('data.offers.0.label', 'Offer 1');
+    $firstResponse = $this->getJson(route('api.funding.offers', $first))
+        ->assertOk()
+        ->assertJsonPath('data.offers.0.label', 'Offer 1');
+    $secondResponse = $this->getJson(route('api.funding.offers', $second))
+        ->assertOk()
+        ->assertJsonPath('data.offers.0.label', 'Offer 1');
     expect($firstResponse->json('data.offers.0.token'))->not->toBe($secondResponse->json('data.offers.0.token'));
 });
 
@@ -343,11 +457,17 @@ it('hides the comparison label from the selected lender and notifies it of the s
     marketOffer(bankStaff(BankRole::Maker), $request);
     $winner = bankStaff(BankRole::Maker);
     $offer = marketOffer($winner, $request);
-    $proposal = app(SelectOffer::class)->propose($maker, $request, $offer->borrower_token, receivingInstructionId($request));
+    $proposal = app(SelectOffer::class)
+        ->propose($maker, $request, $offer->borrower_token, receivingInstructionId($request));
     $deal = app(SelectOffer::class)->review($approver, $proposal, true, null);
 
     signInUser($winner);
-    expect($this->getJson(route('api.deals.show', $deal))->assertOk()->assertJsonPath('data.terms.label', 'Your offer')->getContent())->not->toContain('Offer 3');
+    expect(
+        $this->getJson(route('api.deals.show', $deal))
+            ->assertOk()
+            ->assertJsonPath('data.terms.label', 'Your offer')
+            ->getContent()
+    )->not->toContain('Offer 3');
     $this->get(route('deals.index'))->assertOk()->assertSee('Your offer')->assertDontSee('Offer 3');
     signInUser($approver);
     $this->getJson(route('api.deals.show', $deal))->assertOk()->assertJsonPath('data.terms.label', 'Offer 3');
@@ -360,7 +480,13 @@ it('refuses a selection that would leave too little time to pay the platform fee
     $maker = bankStaff(BankRole::Maker);
     $approver = bankStaff(BankRole::Approver, $maker->membership->bank);
     $deadline = now()->addHours(3);
-    $request = FundingRequest::factory()->published()->create(['bank_id' => $maker->membership->bank_id, 'bidding_deadline' => $deadline, 'settlement_date' => now()->addDays(3)->toDateString()]);
+    $request = FundingRequest::factory()
+        ->published()
+        ->create([
+            'bank_id' => $maker->membership->bank_id,
+            'bidding_deadline' => $deadline,
+            'settlement_date' => now()->addDays(3)->toDateString(),
+        ]);
     $offer = marketOffer(bankStaff(BankRole::Maker), $request, ['valid_until' => $deadline]);
     $instructionId = receivingInstructionId($request);
     $proposal = app(SelectOffer::class)->propose($maker, $request, $offer->borrower_token, $instructionId);
@@ -368,11 +494,22 @@ it('refuses a selection that would leave too little time to pay the platform fee
     $this->travel(2)->hours();
     $this->travel(30)->minutes();
     signInUser($approver);
-    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), ['decision' => 'approve'])->assertConflict();
+    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), [
+        'decision' => 'approve',
+    ])->assertConflict();
     expect($request->fresh()->status)->toBe(FundingRequestStatus::Open);
-    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), ['decision' => 'reject', 'reason' => 'The offer is about to expire.'])->assertOk();
+    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), [
+        'decision' => 'reject',
+        'reason' => 'The offer is about to expire.',
+    ])->assertOk();
 
     signInUser($maker);
-    $this->postJson(route('api.selection.store', $request), ['offer_token' => $offer->borrower_token, 'settlement_instruction_id' => $instructionId])->assertConflict();
-    $this->get(route('funding.offers', $request))->assertOk()->assertSee('expires too soon')->assertDontSee('Propose Offer 1');
+    $this->postJson(route('api.selection.store', $request), [
+        'offer_token' => $offer->borrower_token,
+        'settlement_instruction_id' => $instructionId,
+    ])->assertConflict();
+    $this->get(route('funding.offers', $request))
+        ->assertOk()
+        ->assertSee('expires too soon')
+        ->assertDontSee('Propose Offer 1');
 });

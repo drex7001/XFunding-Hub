@@ -14,11 +14,26 @@ class WithLockedDeal
     /** @param Closure(Deal): mixed $callback */
     public function handle(?User $actor, Deal $deal, Closure $callback): mixed
     {
-        return $this->offers->withRequestLock($actor, $deal->fundingRequest, $deal->lender_bank_id, function (FundingRequest $request) use ($deal, $callback): mixed {
-            $current = Deal::query()->lockForUpdate()->findOrFail($deal->id);
-            $current->setRelation('fundingRequest', $request)->load(['borrowerBank', 'lenderBank', 'settlementInstruction.bank', 'borrowerInstruction.bank', 'verifiedPayment.verifiedReceipt', 'pendingInstructionChange', 'activeDispute', 'confirmations']);
+        return $this->offers->withRequestLock(
+            $actor,
+            $deal->fundingRequest,
+            $deal->lender_bank_id,
+            function (FundingRequest $request) use ($deal, $callback): mixed {
+                $current = Deal::query()->lockForUpdate()->findOrFail($deal->id);
+                $current->setRelation('fundingRequest', $request)
+                    ->load([
+                        'borrowerBank',
+                        'lenderBank',
+                        'settlementInstruction.bank',
+                        'borrowerInstruction.bank',
+                        'verifiedPayment.verifiedReceipt',
+                        'pendingInstructionChange',
+                        'activeDispute',
+                        'confirmations',
+                    ]);
 
-            return $callback($current);
-        });
+                return $callback($current);
+            },
+        );
     }
 }

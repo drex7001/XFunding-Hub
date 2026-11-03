@@ -1,12 +1,11 @@
 @php
     $status = $record->currentStatus();
-    $statusValue = $status->value;
     $approval = $record->pendingApproval;
     $can = $data['can'] ?? [];
     $user = auth()->user();
     $canAddFiles = $user->can('create', [\App\Models\FundingDocument::class, $record]);
     $canOpenDeal = $record->deal && $user->can('view', $record->deal);
-    $canCompare = $owned && in_array($statusValue, ['open', 'selected', 'settled'], true);
+    $canCompare = $owned && in_array($status, [\App\FundingRequestStatus::Open, \App\FundingRequestStatus::Selected, \App\FundingRequestStatus::Settled], true);
 @endphp
 <x-layout title="Funding request">
     <x-page-header
@@ -14,7 +13,7 @@
         :eyebrow="$data['borrower']['name']"
         :back="$owned ? route('funding.index') : route('marketplace')"
         :back-label="$owned ? 'Funding requests' : 'Marketplace'"
-        :status="$statusValue"
+        :status="$status"
         :status-label="$status->label()"
         :meta="'Ref '.strtoupper(substr($record->id, -8)).($owned ? ' · Revision '.$record->version : '')"
     >
@@ -166,7 +165,7 @@
                     <span class="doc-icon">PDF</span>
                     <div class="row__text">
                         <strong>{{ $document->original_name }}</strong>
-                        <small>{{ number_format($document->size / 1024) }} KB</small>
+                        <small>{{ number_format(max(1, $document->size / 1024)) }} KB</small>
                     </div>
                     <div class="row-actions">
                         <a class="link-button" href="{{ route('funding.documents.show', $document) }}">Download</a>

@@ -15,7 +15,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['deal_id', 'bank_id', 'initiated_by', 'provider', 'provider_reference', 'amount_minor', 'currency', 'pending_slot'])]
+#[Fillable([
+    'deal_id',
+    'bank_id',
+    'initiated_by',
+    'provider',
+    'provider_reference',
+    'amount_minor',
+    'currency',
+    'pending_slot',
+])]
 #[Hidden(['initiated_by', 'pending_slot'])]
 class FeePayment extends Model
 {
@@ -24,7 +33,11 @@ class FeePayment extends Model
 
     protected function casts(): array
     {
-        return ['status' => FeePaymentStatus::class, 'amount_minor' => 'integer', 'verified_at' => 'immutable_datetime'];
+        return [
+            'status' => FeePaymentStatus::class,
+            'amount_minor' => 'integer',
+            'verified_at' => 'immutable_datetime',
+        ];
     }
 
     protected function amount(): Attribute

@@ -19,7 +19,9 @@ class OfferPolicy
 
     public function view(User $user, Offer $offer): Response
     {
-        return $this->viewAny($user) && $user->membership->bank_id === $offer->bank_id ? Response::allow() : Response::denyAsNotFound();
+        return $this->viewAny($user) && $user->membership->bank_id === $offer->bank_id
+            ? Response::allow()
+            : Response::denyAsNotFound();
     }
 
     public function create(User $user, FundingRequest $request): bool

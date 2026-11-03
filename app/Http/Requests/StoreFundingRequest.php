@@ -22,7 +22,11 @@ class StoreFundingRequest extends FormRequest
             'title' => ['required', 'string', 'max:180'],
             'amount' => ['required', 'string', 'regex:/^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/',
                 function (string $attribute, mixed $value, \Closure $fail): void {
-                    if (is_string($value) && preg_match('/^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/', $value) && FundingRequest::amountToMinor($value) < 1) {
+                    if (
+                        is_string($value)
+                        && preg_match('/^(?:0|[1-9][0-9]{0,11})(?:\.[0-9]{1,2})?$/', $value)
+                        && FundingRequest::amountToMinor($value) < 1
+                    ) {
                         $fail('The amount must be greater than zero.');
                     }
                 }],
@@ -49,9 +53,13 @@ class StoreFundingRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator): void {
-            if (! $validator->errors()->hasAny(['bidding_deadline', 'settlement_date'])
-                && CarbonImmutable::parse($this->input('bidding_deadline'), 'UTC')->utc()->toDateString() > $this->input('settlement_date')) {
-                $validator->errors()->add('bidding_deadline', 'The bidding deadline must be on or before the settlement date (UTC).');
+            if ($validator->errors()->hasAny(['bidding_deadline', 'settlement_date'])) {
+                return;
+            }
+            $deadline = CarbonImmutable::parse($this->input('bidding_deadline'), 'UTC')->utc();
+            if ($deadline->toDateString() > $this->input('settlement_date')) {
+                $validator->errors()
+                    ->add('bidding_deadline', 'The bidding deadline must be on or before the settlement date (UTC).');
             }
         }];
     }

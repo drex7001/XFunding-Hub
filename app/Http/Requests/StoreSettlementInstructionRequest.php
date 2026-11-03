@@ -21,7 +21,12 @@ class StoreSettlementInstructionRequest extends FormRequest
             'account_name' => ['required', 'string', 'min:3', 'max:140'],
             'account_number' => ['required', 'string', 'regex:/^[A-Z0-9]{4,34}$/'],
             'rtgs_code' => ['nullable', 'required_if:channel,rtgs', 'string', 'regex:/^[A-Za-z0-9 .-]{2,35}$/'],
-            'bic' => ['nullable', 'required_if:channel,swift', 'string', 'regex:/^[A-Z0-9]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?$/'],
+            'bic' => [
+                'nullable',
+                'required_if:channel,swift',
+                'string',
+                'regex:/^[A-Z0-9]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?$/',
+            ],
             'contact_name' => ['required', 'string', 'max:140'],
             'contact_email' => ['required', 'email', 'max:255'],
             'bank_id' => ['prohibited'], 'created_by' => ['prohibited'], 'reviewed_by' => ['prohibited'],

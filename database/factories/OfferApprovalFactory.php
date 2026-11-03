@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\ApprovalStatus;
 use App\Models\Offer;
 use App\Models\OfferApproval;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -16,8 +17,9 @@ class OfferApprovalFactory extends Factory
     {
         return [
             'offer_id' => Offer::factory()->pending(),
-            'proposed_by' => fn (array $attributes): int => Offer::query()->findOrFail($attributes['offer_id'])->created_by,
-            'expected_version' => 1, 'status' => 'pending',
+            'proposed_by' => fn (array $attributes): int => Offer::query()
+                ->findOrFail($attributes['offer_id'])->created_by,
+            'expected_version' => 1, 'status' => ApprovalStatus::Pending,
         ];
     }
 }

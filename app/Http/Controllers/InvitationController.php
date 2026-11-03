@@ -21,7 +21,15 @@ class InvitationController extends Controller
     {
         abort_unless(strlen($token) === 64, 404);
 
-        return BankInvitation::query()->where('token_hash', hash('sha256', $token))->whereNull('accepted_at')->where('expires_at', '>', now())->whereHas('bank', fn (Builder $query): Builder => $query->where('status', '!=', BankStatus::Suspended->value))->firstOrFail();
+        return BankInvitation::query()
+            ->where('token_hash', hash('sha256', $token))
+            ->whereNull('accepted_at')
+            ->where('expires_at', '>', now())
+            ->whereHas(
+                'bank',
+                fn (Builder $query): Builder => $query->where('status', '!=', BankStatus::Suspended->value),
+            )
+            ->firstOrFail();
     }
 
     public function show(string $token): View
@@ -38,9 +46,17 @@ class InvitationController extends Controller
             if (User::query()->where('email', $invitation->email)->exists()) {
                 throw ValidationException::withMessages(['email' => 'This email already belongs to an account.']);
             }
-            $user = User::create(['name' => $invitation->name, 'email' => $invitation->email, 'password' => $request->validated('password')]);
+            $user = User::create([
+                'name' => $invitation->name,
+                'email' => $invitation->email,
+                'password' => $request->validated('password'),
+            ]);
             $user->forceFill(['email_verified_at' => now()])->save();
-            BankMembership::create(['bank_id' => $invitation->bank_id, 'user_id' => $user->id, 'roles' => $invitation->roles]);
+            BankMembership::create([
+                'bank_id' => $invitation->bank_id,
+                'user_id' => $user->id,
+                'roles' => $invitation->roles,
+            ]);
             $invitation->forceFill(['accepted_at' => now()])->save();
             $audit->handle($user, 'invitation.accepted', $invitation);
         });

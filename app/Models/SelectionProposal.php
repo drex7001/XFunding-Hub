@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\ApprovalStatus;
 use Database\Factories\SelectionProposalFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -10,7 +11,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['funding_request_id', 'offer_id', 'proposed_by', 'expected_offer_version', 'borrower_settlement_instruction_id', 'pending_slot'])]
+#[Fillable([
+    'funding_request_id',
+    'offer_id',
+    'proposed_by',
+    'expected_offer_version',
+    'borrower_settlement_instruction_id',
+    'pending_slot',
+])]
 #[Hidden(['offer_id', 'borrower_settlement_instruction_id'])]
 class SelectionProposal extends Model
 {
@@ -19,7 +27,11 @@ class SelectionProposal extends Model
 
     protected function casts(): array
     {
-        return ['expected_offer_version' => 'integer', 'reviewed_at' => 'immutable_datetime'];
+        return [
+            'status' => ApprovalStatus::class,
+            'expected_offer_version' => 'integer',
+            'reviewed_at' => 'immutable_datetime',
+        ];
     }
 
     public function offer(): BelongsTo

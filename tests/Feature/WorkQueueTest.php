@@ -46,7 +46,13 @@ it('gives publication approval only to an independent approver', function () {
     $maker = bankStaff(BankRole::Maker);
     $bank = $maker->membership->bank;
     $request = fundingDraft($maker, ['status' => 'pending_approval']);
-    FundingRequestApproval::factory()->create(['funding_request_id' => $request->id, 'proposed_by' => $maker->id, 'expected_version' => $request->version, 'kind' => 'publish']);
+    FundingRequestApproval::factory()
+        ->create([
+            'funding_request_id' => $request->id,
+            'proposed_by' => $maker->id,
+            'expected_version' => $request->version,
+            'kind' => 'publish',
+        ]);
     $independent = bankStaff(BankRole::Approver, $bank);
     $contributor = bankStaff(BankRole::Approver, $bank);
     $request->forceFill(['contributor_ids' => [$maker->id, $contributor->id]])->save();
@@ -67,13 +73,20 @@ it('never asks anyone to approve their own selection, even with both roles', fun
 
     expect(tasksFor($proposer))->not->toContain('Approve offer selection')
         ->and(tasksFor($proposer, 'waiting'))->toContain('Approve offer selection')
-        ->and(tasksFor(bankStaff(BankRole::Approver, $proposer->membership->bank)))->toContain('Approve offer selection');
+        ->and(tasksFor(bankStaff(BankRole::Approver, $proposer->membership->bank)))
+        ->toContain('Approve offer selection');
 });
 
 it('routes offer drafts to makers and approvals to independent lender approvers', function () {
     $maker = bankStaff(BankRole::Maker);
     $request = FundingRequest::factory()->published()->create();
-    $offer = Offer::factory()->create(['bank_id' => $maker->membership->bank_id, 'created_by' => $maker->id, 'funding_request_id' => $request->id, 'contributor_ids' => [$maker->id]]);
+    $offer = Offer::factory()
+        ->create([
+            'bank_id' => $maker->membership->bank_id,
+            'created_by' => $maker->id,
+            'funding_request_id' => $request->id,
+            'contributor_ids' => [$maker->id],
+        ]);
     expect(tasksFor($maker))->toContain('Send offer for approval');
 
     $offer->forceFill(['status' => OfferStatus::PendingApproval])->save();
@@ -89,13 +102,16 @@ it('asks treasury staff to set up instructions and an independent approver to ap
     $approver = bankStaff(BankRole::Approver, $maker->membership->bank);
     expect(tasksFor($maker, 'setup'))->toContain('Add settlement instructions');
 
-    $instruction = SettlementInstruction::factory()->create(['bank_id' => $maker->membership->bank_id, 'created_by' => $maker->id]);
+    $instruction = SettlementInstruction::factory()
+        ->create(['bank_id' => $maker->membership->bank_id, 'created_by' => $maker->id]);
     expect(tasksFor($maker, 'setup'))->toBe([])
         ->and(tasksFor($maker, 'waiting'))->toContain('Approve settlement instructions')
         ->and(tasksFor($approver))->toContain('Approve settlement instructions');
 
     $instruction->forceFill(['status' => 'approved'])->save();
-    expect(tasksFor($maker, 'setup'))->toBe([])->and(tasksFor($approver))->not->toContain('Approve settlement instructions');
+    expect(tasksFor($maker, 'setup'))
+        ->toBe([])
+        ->and(tasksFor($approver))->not->toContain('Approve settlement instructions');
 });
 
 it('walks each bank through the fee and settlement steps of a deal', function () {
@@ -117,7 +133,8 @@ it('walks each bank through the fee and settlement steps of a deal', function ()
         ->and(tasksFor($borrowerMaker))->toContain('Confirm principal received')
         ->and(tasksFor($lenderApprover))->not->toContain('Send principal and confirm');
 
-    $confirmation = app(ManageSettlementConfirmations::class)->propose($lenderMaker, $deal->fresh(), settlementPayload());
+    $confirmation = app(ManageSettlementConfirmations::class)
+        ->propose($lenderMaker, $deal->fresh(), settlementPayload());
     expect(tasksFor($lenderApprover))->toContain('Review settlement confirmation')
         ->and(tasksFor($lenderMaker))->not->toContain('Send principal and confirm')
         ->and(tasksFor($lenderMaker, 'waiting'))->toContain('Settlement confirmation');
@@ -134,7 +151,9 @@ it('shows an instruction review only to the side that owns the change', function
     app(ChangeDealInstructions::class)->propose($maker, $deal, $instruction->id);
 
     expect(tasksFor(bankStaff(BankRole::Approver, $deal->lenderBank)))->toContain('Review instruction update')
-        ->and(tasksFor(bankStaff(BankRole::Approver, $deal->borrowerBank)))->not->toContain('Review instruction update');
+        ->and(
+            tasksFor(bankStaff(BankRole::Approver, $deal->borrowerBank))
+        )->not->toContain('Review instruction update');
 });
 
 it('never names the lender in anything the borrower sees in the queue', function () {
@@ -143,14 +162,17 @@ it('never names the lender in anything the borrower sees in the queue', function
     $approver = bankStaff(BankRole::Approver, $maker->membership->bank);
     $request = FundingRequest::factory()->published()->create(['bank_id' => $maker->membership->bank_id]);
     $offer = marketOffer(bankStaff(BankRole::Maker, $lenderBank), $request);
-    $proposal = app(SelectOffer::class)->propose($maker, $request, $offer->borrower_token, receivingInstructionId($request));
+    $proposal = app(SelectOffer::class)
+        ->propose($maker, $request, $offer->borrower_token, receivingInstructionId($request));
     app(SelectOffer::class)->review($approver, $proposal, true, null);
 
     foreach ([$maker, $approver] as $user) {
         signInUser($user->fresh(['membership.bank']));
         $this->get(route('dashboard'))->assertOk()->assertDontSee('Hidden Lender Bank');
     }
-    expect(json_encode(app(BuildWorkQueue::class)->for($approver->fresh(['membership.bank']))))->not->toContain('Hidden Lender Bank');
+    expect(
+        json_encode(app(BuildWorkQueue::class)->for($approver->fresh(['membership.bank'])))
+    )->not->toContain('Hidden Lender Bank');
 });
 
 it('keeps another bank out of the queue', function () {
@@ -187,29 +209,55 @@ it('gives platform operations its own queue without treasury work', function () 
     $bank = Bank::factory()->verified()->create();
     AccessRequest::factory()->create(['bank_id' => $bank->id, 'requested_by' => bankStaff(BankRole::Admin, $bank)->id]);
     $deal = unlockedDeal();
-    app(ManageDealDisputes::class)->open(bankStaff(BankRole::Approver, $deal->borrowerBank), $deal, 'Synthetic discrepancy pending investigation.');
+    app(ManageDealDisputes::class)
+        ->open(
+            bankStaff(BankRole::Approver, $deal->borrowerBank),
+            $deal,
+            'Synthetic discrepancy pending investigation.',
+        );
     signedPaymentNotification(paymentNotificationPayload($deal->verifiedPayment))->assertOk();
 
     expect(array_column(app(BuildWorkQueue::class)->for($operator)['actions'], 'task'))
-        ->toContain('Verify institution')->toContain('Review access request')->toContain('Resolve settlement dispute')->toContain('Review payment exception');
+        ->toContain('Verify institution')
+        ->toContain('Review access request')
+        ->toContain('Resolve settlement dispute')
+        ->toContain('Review payment exception');
 });
 
 it('puts the nearest deadline first', function () {
     $maker = bankStaff(BankRole::Maker);
     $bankId = $maker->membership->bank_id;
-    $late = FundingRequest::factory()->published()->create(['bank_id' => $bankId, 'title' => 'Closes later', 'bidding_deadline' => now()->addDays(3), 'settlement_date' => now()->addDays(5)->toDateString()]);
-    $soon = FundingRequest::factory()->published()->create(['bank_id' => $bankId, 'title' => 'Closes soon', 'bidding_deadline' => now()->addHours(5), 'settlement_date' => now()->addDays(5)->toDateString()]);
+    $late = FundingRequest::factory()
+        ->published()
+        ->create([
+            'bank_id' => $bankId,
+            'title' => 'Closes later',
+            'bidding_deadline' => now()->addDays(3),
+            'settlement_date' => now()->addDays(5)->toDateString(),
+        ]);
+    $soon = FundingRequest::factory()
+        ->published()
+        ->create([
+            'bank_id' => $bankId,
+            'title' => 'Closes soon',
+            'bidding_deadline' => now()->addHours(5),
+            'settlement_date' => now()->addDays(5)->toDateString(),
+        ]);
     marketOffer(bankStaff(), $late);
     marketOffer(bankStaff(), $soon);
 
-    expect(app(BuildWorkQueue::class)->for($maker->fresh(['membership.bank']))['actions'][0]['title'])->toBe('Closes soon');
+    expect(app(BuildWorkQueue::class)->for($maker->fresh(['membership.bank']))['actions'][0]['title'])
+        ->toBe('Closes soon');
 });
 
 it('keeps the home page query count flat as work grows', function () {
     $approver = bankStaff(BankRole::Approver);
     $add = function () use ($approver): void {
         paymentDeal($approver);
-        marketOffer(bankStaff(), FundingRequest::factory()->published()->create(['bank_id' => $approver->membership->bank_id]));
+        marketOffer(
+            bankStaff(),
+            FundingRequest::factory()->published()->create(['bank_id' => $approver->membership->bank_id]),
+        );
     };
     $add();
     signInUser($approver);

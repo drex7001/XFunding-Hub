@@ -29,7 +29,11 @@ class SettlementDisclosureResource extends JsonResource
      */
     private function institution(array $snapshot): array
     {
-        return ['name' => $snapshot['bank']['name'], 'countryCode' => $snapshot['bank']['country_code'], 'registrationNumber' => $snapshot['bank']['registration_number']];
+        return [
+            'name' => $snapshot['bank']['name'],
+            'countryCode' => $snapshot['bank']['country_code'],
+            'registrationNumber' => $snapshot['bank']['registration_number'],
+        ];
     }
 
     /**
@@ -41,8 +45,12 @@ class SettlementDisclosureResource extends JsonResource
         $details = $snapshot['details'];
 
         return [
-            'version' => $snapshot['version'], 'channel' => $details['channel'], 'accountName' => $details['account_name'],
-            'accountNumber' => $details['account_number'], 'bic' => $details['bic'] ?? null, 'rtgsCode' => $details['rtgs_code'] ?? null,
+            'version' => $snapshot['version'],
+            'channel' => $details['channel'],
+            'accountName' => $details['account_name'],
+            'accountNumber' => $details['account_number'],
+            'bic' => $details['bic'] ?? null,
+            'rtgsCode' => $details['rtgs_code'] ?? null,
             'contactName' => $details['contact_name'], 'contactEmail' => $details['contact_email'],
         ];
     }

@@ -26,7 +26,8 @@ class DescribeWorkflowProgress
 
         return match ($request->currentStatus()) {
             FundingRequestStatus::Settled => $this->steps($labels, count($labels)),
-            FundingRequestStatus::Expired, FundingRequestStatus::Cancelled => $this->steps($labels, $reached, stopped: true),
+            FundingRequestStatus::Expired,
+            FundingRequestStatus::Cancelled => $this->steps($labels, $reached, stopped: true),
             default => $this->steps($labels, $reached),
         };
     }

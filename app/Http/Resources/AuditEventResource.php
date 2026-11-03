@@ -12,8 +12,12 @@ class AuditEventResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->id, 'action' => $this->action, 'label' => ucfirst(str_replace(['.', '_'], ' ', $this->action)),
-            'actor' => $this->actorLabel(), 'subject' => Str::headline(class_basename($this->subject_type)), 'subjectId' => $this->subject_id,
+            'id' => $this->id,
+            'action' => $this->action,
+            'label' => ucfirst(str_replace(['.', '_'], ' ', $this->action)),
+            'actor' => $this->actorLabel(),
+            'subject' => Str::headline(class_basename($this->subject_type)),
+            'subjectId' => $this->subject_id,
             'at' => $this->created_at->toIso8601String(),
         ];
     }

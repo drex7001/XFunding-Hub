@@ -25,9 +25,15 @@ class ManagePlatformAccounts
         }
         $email = Str::lower(trim($email));
         $account = DB::transaction(function () use ($actor, $name, $email, $reason): User {
-            $hasActiveInvitation = BankInvitation::query()->where('email', $email)->whereNull('accepted_at')->where('expires_at', '>', now())->exists();
+            $hasActiveInvitation = BankInvitation::query()
+                ->where('email', $email)
+                ->whereNull('accepted_at')
+                ->where('expires_at', '>', now())
+                ->exists();
             if ($hasActiveInvitation || User::query()->where('email', $email)->exists()) {
-                throw ValidationException::withMessages(['email' => 'This email already has an account or an active invitation.']);
+                throw ValidationException::withMessages([
+                    'email' => 'This email already has an account or an active invitation.',
+                ]);
             }
             $account = new User(['name' => $name, 'email' => $email, 'password' => Str::password(40)]);
             $account->forceFill(['is_platform_admin' => true, 'email_verified_at' => now()])->save();
@@ -53,13 +59,22 @@ class ManagePlatformAccounts
     private function changeStatus(User $actor, User $account, bool $active, string $action, string $reason): void
     {
         DB::transaction(function () use ($actor, $account, $active, $action, $reason): void {
-            $locked = User::query()->whereKey([$actor->id, $account->id])->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $locked = User::query()
+                ->whereKey([$actor->id, $account->id])
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get()
+                ->keyBy('id');
             $current = $locked->get($account->id);
             $authVersion = $actor->auth_version;
             $actor->refresh();
             abort_unless($actor->auth_version === $authVersion, 401, 'Please sign in again.');
             Gate::forUser($actor)->authorize('changePlatformAccountStatus', $current);
-            abort_unless($current->active !== $active, 409, $active ? 'This account is already active.' : 'This account is already inactive.');
+            abort_unless(
+                $current->active !== $active,
+                409,
+                $active ? 'This account is already active.' : 'This account is already inactive.',
+            );
             $current->forceFill(['active' => $active, 'auth_version' => $current->auth_version + 1])->save();
             $this->audit->handle($actor, $action, $current, ['reason' => $reason]);
         }, attempts: 3);

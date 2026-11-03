@@ -44,7 +44,15 @@ function dealWithoutReceivingInstructions(Deal $deal): Deal
 
 function receivingVersion(Bank $bank, string $account = 'RECEIVINGACCOUNT01'): SettlementInstruction
 {
-    return SettlementInstruction::factory()->approved()->create(['bank_id' => $bank->id, 'details' => instructionPayload(['account_number' => $account, 'contact_email' => 'receiving@synthetic.example'])]);
+    return SettlementInstruction::factory()
+        ->approved()
+        ->create([
+            'bank_id' => $bank->id,
+            'details' => instructionPayload([
+                'account_number' => $account,
+                'contact_email' => 'receiving@synthetic.example',
+            ]),
+        ]);
 }
 
 it('lets borrower-only treasury staff manage their own instructions', function (BankRole $role) {
@@ -53,7 +61,8 @@ it('lets borrower-only treasury staff manage their own instructions', function (
     $instruction = SettlementInstruction::factory()->create(['bank_id' => $bank->id]);
     $gate = Gate::forUser($user);
 
-    expect($gate->allows('viewAny', SettlementInstruction::class))->toBe(in_array($role, [BankRole::Maker, BankRole::Approver], true))
+    expect($gate->allows('viewAny', SettlementInstruction::class))
+        ->toBe(in_array($role, [BankRole::Maker, BankRole::Approver], true))
         ->and($gate->allows('create', SettlementInstruction::class))->toBe($role === BankRole::Maker)
         ->and($gate->allows('review', $instruction))->toBe($role === BankRole::Approver)
         ->and($gate->allows('viewMarketplace', FundingRequest::class))->toBeFalse();
@@ -66,13 +75,28 @@ it('requires a current approved receiving version from the borrower bank to prop
     $payload += match ($case) {
         'missing' => [],
         'another bank' => ['settlement_instruction_id' => SettlementInstruction::factory()->approved()->create()->id],
-        'not approved' => ['settlement_instruction_id' => SettlementInstruction::factory()->create(['bank_id' => $bank->id])->id],
-        'retired' => ['settlement_instruction_id' => SettlementInstruction::factory()->approved()->create(['bank_id' => $bank->id, 'status' => 'retired'])->id],
-        'stale profile' => ['settlement_instruction_id' => SettlementInstruction::factory()->approved()->create(['bank_id' => $bank->id, 'bank_profile' => ['name' => 'Old', 'country_code' => 'LK', 'registration_number' => 'OLD']])->id],
+        'not approved' => [
+            'settlement_instruction_id' => SettlementInstruction::factory()->create(['bank_id' => $bank->id])->id,
+        ],
+        'retired' => [
+            'settlement_instruction_id' => SettlementInstruction::factory()
+                ->approved()
+                ->create(['bank_id' => $bank->id, 'status' => 'retired'])->id,
+        ],
+        'stale profile' => [
+            'settlement_instruction_id' => SettlementInstruction::factory()
+                ->approved()
+                ->create([
+                    'bank_id' => $bank->id,
+                    'bank_profile' => ['name' => 'Old', 'country_code' => 'LK', 'registration_number' => 'OLD'],
+                ])->id,
+        ],
     };
     signInUser($maker);
 
-    $this->postJson(route('api.selection.store', $request), $payload)->assertUnprocessable()->assertJsonValidationErrors('settlement_instruction_id');
+    $this->postJson(route('api.selection.store', $request), $payload)
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('settlement_instruction_id');
     $this->assertDatabaseCount('selection_proposals', 0);
 })->with(['missing', 'another bank', 'not approved', 'retired', 'stale profile']);
 
@@ -80,13 +104,22 @@ it('offers makers their approved versions without banking details and tells them
     [$maker, $approver, $request] = borrowerSelectionSetup();
     signInUser($maker);
     $this->getJson(route('api.funding.offers', $request))->assertOk()->assertJsonPath('data.receivingInstructions', []);
-    $this->get(route('funding.offers', $request))->assertOk()->assertSee('Approve your receiving account first')->assertDontSee('Propose Offer 1');
+    $this->get(route('funding.offers', $request))
+        ->assertOk()
+        ->assertSee('Approve your receiving account first')
+        ->assertDontSee('Propose Offer 1');
 
     $version = receivingVersion($maker->membership->bank);
     SettlementInstruction::factory()->create(['bank_id' => $maker->membership->bank_id]);
-    $response = $this->getJson(route('api.funding.offers', $request))->assertOk()->assertJsonCount(1, 'data.receivingInstructions')->assertJsonPath('data.receivingInstructions.0.id', $version->id);
+    $response = $this->getJson(route('api.funding.offers', $request))
+        ->assertOk()
+        ->assertJsonCount(1, 'data.receivingInstructions')
+        ->assertJsonPath('data.receivingInstructions.0.id', $version->id);
     expect($response->getContent())->not->toContain('RECEIVINGACCOUNT01');
-    $this->get(route('funding.offers', $request))->assertOk()->assertSee('Your receiving account')->assertSee('Propose Offer 1');
+    $this->get(route('funding.offers', $request))
+        ->assertOk()
+        ->assertSee('Your receiving account')
+        ->assertSee('Propose Offer 1');
 
     signInUser($approver);
     $this->getJson(route('api.funding.offers', $request))->assertOk()->assertJsonPath('data.receivingInstructions', []);
@@ -97,14 +130,18 @@ it('snapshots the proposed receiving version encrypted on the deal and keeps it 
     $version = receivingVersion($maker->membership->bank);
     $proposal = app(SelectOffer::class)->propose($maker, $request, $offer->borrower_token, $version->id);
     signInUser($approver);
-    $this->get(route('funding.offers', $request))->assertOk()->assertSee('Receiving instructions: version '.$version->version);
+    $this->get(route('funding.offers', $request))
+        ->assertOk()
+        ->assertSee('Receiving instructions: version '.$version->version);
 
     $deal = app(SelectOffer::class)->review($approver, $proposal, true, null);
     receivingVersion($maker->membership->bank, 'NEWERACCOUNT0002');
 
     expect($deal->fresh()->borrower_settlement_instruction_id)->toBe($version->id)
         ->and($deal->fresh()->borrower_instruction_snapshot['details']['account_number'])->toBe('RECEIVINGACCOUNT01')
-        ->and(DB::table('deals')->where('id', $deal->id)->value('borrower_instruction_snapshot'))->not->toContain('RECEIVINGACCOUNT01');
+        ->and(
+            DB::table('deals')->where('id', $deal->id)->value('borrower_instruction_snapshot')
+        )->not->toContain('RECEIVINGACCOUNT01');
 });
 
 it('refuses approval when the proposed receiving version is no longer current', function () {
@@ -114,17 +151,27 @@ it('refuses approval when the proposed receiving version is no longer current', 
     $maker->membership->bank->update(['name' => 'Renamed Borrower Bank']);
     signInUser($approver->fresh(['membership.bank']));
 
-    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), ['decision' => 'approve'])->assertConflict();
+    $this->postJson(route('api.selection.review', ['fundingRequest' => $request, 'selection' => $proposal]), [
+        'decision' => 'approve',
+    ])->assertConflict();
     $this->assertDatabaseCount('deals', 0);
 });
 
 it('discloses the borrower receiving account to the selected lender only after the fee is verified', function () {
     [$maker, $approver, $request, $lender, $offer] = borrowerSelectionSetup();
     $version = receivingVersion($maker->membership->bank);
-    $deal = app(SelectOffer::class)->review($approver, app(SelectOffer::class)->propose($maker, $request, $offer->borrower_token, $version->id), true, null);
+    $deal = app(SelectOffer::class)
+        ->review(
+            $approver,
+            app(SelectOffer::class)->propose($maker, $request, $offer->borrower_token, $version->id),
+            true,
+            null,
+        );
     $lenderApprover = bankStaff(BankRole::Approver, $lender->membership->bank);
     signInUser($lender);
-    expect($this->getJson(route('api.deals.show', $deal))->assertOk()->getContent())->not->toContain('RECEIVINGACCOUNT01')->not->toContain($version->id);
+    expect(
+        $this->getJson(route('api.deals.show', $deal))->assertOk()->getContent()
+    )->not->toContain('RECEIVINGACCOUNT01')->not->toContain($version->id);
     $this->getJson(route('api.deals.settlement', $deal))->assertForbidden();
 
     $payment = app(ManageFeePayments::class)->initiate($approver->fresh(['membership.bank']), $deal->fresh());
@@ -136,8 +183,13 @@ it('discloses the borrower receiving account to the selected lender only after t
             ->assertJsonPath('data.borrower.name', $maker->membership->bank->name)
             ->assertJsonPath('data.borrowerInstructions.accountNumber', 'RECEIVINGACCOUNT01')
             ->assertJsonPath('data.borrowerInstructions.contactEmail', 'receiving@synthetic.example');
-        $this->get(route('deals.settlement', $deal))->assertOk()->assertSee('Borrower receiving account')->assertSee('RECEIVINGACCOUNT01');
-        expect($this->getJson(route('api.deals.show', $deal))->assertOk()->getContent())->not->toContain('RECEIVINGACCOUNT01');
+        $this->get(route('deals.settlement', $deal))
+            ->assertOk()
+            ->assertSee('Borrower receiving account')
+            ->assertSee('RECEIVINGACCOUNT01');
+        expect(
+            $this->getJson(route('api.deals.show', $deal))->assertOk()->getContent()
+        )->not->toContain('RECEIVINGACCOUNT01');
     }
     foreach ([BankRole::Admin, BankRole::Auditor] as $role) {
         signInUser(bankStaff($role, $lender->membership->bank));
@@ -155,18 +207,32 @@ it('blocks payment until an older deal records receiving instructions through in
     $maker = bankStaff(BankRole::Maker, $approver->membership->bank);
     $version = receivingVersion($approver->membership->bank);
     signInUser($approver);
-    $this->getJson(route('api.deals.show', $deal))->assertOk()->assertJsonPath('data.can.initiatePayment', false)->assertJsonPath('data.receivingInstructionsRecorded', false);
+    $this->getJson(route('api.deals.show', $deal))
+        ->assertOk()
+        ->assertJsonPath('data.can.initiatePayment', false)
+        ->assertJsonPath('data.receivingInstructionsRecorded', false);
     $this->get(route('deals.show', $deal))->assertOk()->assertSee('Receiving instructions required');
     $this->postJson(route('api.payments.store', $deal))->assertConflict();
 
     signInUser($maker);
     $this->get(route('deals.show', $deal))->assertOk()->assertSee('Update approved settlement instructions');
-    $changeId = $this->postJson(route('api.deal-instructions.store', $deal), ['settlement_instruction_id' => $version->id])->assertCreated()->json('data.id');
-    $this->postJson(route('api.deal-instructions.review', ['deal' => $deal, 'change' => $changeId]), ['decision' => 'approve'])->assertForbidden();
+    $changeId = $this->postJson(route('api.deal-instructions.store', $deal), [
+        'settlement_instruction_id' => $version->id,
+    ])
+        ->assertCreated()
+        ->json('data.id');
+    $this->postJson(route('api.deal-instructions.review', ['deal' => $deal, 'change' => $changeId]), [
+        'decision' => 'approve',
+    ])->assertForbidden();
 
     signInUser($approver);
-    $this->getJson(route('api.deals.show', $deal))->assertOk()->assertJsonPath('data.instructionChange.id', $changeId)->assertJsonPath('data.instructionChange.canReview', true);
-    $this->postJson(route('api.deal-instructions.review', ['deal' => $deal, 'change' => $changeId]), ['decision' => 'approve'])->assertOk()
+    $this->getJson(route('api.deals.show', $deal))
+        ->assertOk()
+        ->assertJsonPath('data.instructionChange.id', $changeId)
+        ->assertJsonPath('data.instructionChange.canReview', true);
+    $this->postJson(route('api.deal-instructions.review', ['deal' => $deal, 'change' => $changeId]), [
+        'decision' => 'approve',
+    ])->assertOk()
         ->assertJsonPath('data.can.initiatePayment', true)->assertJsonPath('data.receivingInstructionsRecorded', true);
     $this->postJson(route('api.payments.store', $deal))->assertCreated();
 });
@@ -176,8 +242,13 @@ it('keeps lender disclosure on a paid older deal and lets the borrower add recei
     $maker = bankStaff(BankRole::Maker, $deal->borrowerBank);
     $version = receivingVersion($deal->borrowerBank);
     signInUser($maker);
-    $this->getJson(route('api.deals.settlement', $deal))->assertOk()->assertJsonPath('data.borrowerInstructions', null)->assertJsonPath('data.instructions.accountNumber', 'DEMO000012345678');
-    $this->get(route('deals.settlement', $deal))->assertOk()->assertSee('has not recorded approved receiving instructions');
+    $this->getJson(route('api.deals.settlement', $deal))
+        ->assertOk()
+        ->assertJsonPath('data.borrowerInstructions', null)
+        ->assertJsonPath('data.instructions.accountNumber', 'DEMO000012345678');
+    $this->get(route('deals.settlement', $deal))
+        ->assertOk()
+        ->assertSee('has not recorded approved receiving instructions');
     $this->postJson(route('api.confirmations.store', $deal), settlementPayload())->assertConflict();
 
     $change = app(ChangeDealInstructions::class)->propose($maker, $deal, $version->id);
@@ -192,15 +263,21 @@ it('requires an open dispute to change recorded borrower instructions after unlo
     $maker = bankStaff(BankRole::Maker, $deal->borrowerBank);
     $version = receivingVersion($deal->borrowerBank, 'CORRECTEDACCOUNT01');
     signInUser($maker);
-    $this->postJson(route('api.deal-instructions.store', $deal), ['settlement_instruction_id' => $version->id])->assertConflict();
+    $this->postJson(route('api.deal-instructions.store', $deal), ['settlement_instruction_id' => $version->id])
+        ->assertConflict();
 
     $original = $deal->fresh()->borrower_instruction_snapshot;
     $confirmation = confirmedInstitution($deal->fresh(), $deal->lenderBank);
-    app(ManageDealDisputes::class)->open(bankStaff(BankRole::Approver, $deal->borrowerBank), $deal->fresh(), 'The receiving account needs a documented correction.');
+    app(ManageDealDisputes::class)
+        ->open(
+            bankStaff(BankRole::Approver, $deal->borrowerBank),
+            $deal->fresh(),
+            'The receiving account needs a documented correction.',
+        );
     $change = app(ChangeDealInstructions::class)->propose($maker, $deal->fresh(), $version->id);
     app(ChangeDealInstructions::class)->review(bankStaff(BankRole::Approver, $deal->borrowerBank), $change, true, null);
 
-    expect($confirmation->fresh()->status)->toBe('superseded')
+    expect($confirmation->fresh()->status->value)->toBe('superseded')
         ->and($change->fresh()->previous_snapshot)->toBe($original)
         ->and($deal->fresh()->borrower_instruction_snapshot['details']['account_number'])->toBe('CORRECTEDACCOUNT01')
         ->and($deal->fresh()->instruction_snapshot['details']['account_number'])->toBe('DEMO000012345678')
@@ -215,9 +292,14 @@ it('keeps each institution out of the other side pending instruction change', fu
     expect($change->side)->toBe('borrower');
 
     signInUser(bankStaff(BankRole::Approver, $deal->lenderBank));
-    $response = $this->getJson(route('api.deals.show', $deal))->assertOk()->assertJsonPath('data.instructionReviewPending', true)->assertJsonMissingPath('data.instructionChange');
+    $response = $this->getJson(route('api.deals.show', $deal))
+        ->assertOk()
+        ->assertJsonPath('data.instructionReviewPending', true)
+        ->assertJsonMissingPath('data.instructionChange');
     expect($response->getContent())->not->toContain($version->id);
-    $this->postJson(route('api.deal-instructions.review', ['deal' => $deal, 'change' => $change]), ['decision' => 'approve'])->assertForbidden();
+    $this->postJson(route('api.deal-instructions.review', ['deal' => $deal, 'change' => $change]), [
+        'decision' => 'approve',
+    ])->assertForbidden();
     expect($deal->fresh()->borrower_settlement_instruction_id)->not->toBe($version->id);
 });
 

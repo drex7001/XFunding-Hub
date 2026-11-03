@@ -31,12 +31,16 @@ class SetupDemoPayments extends Command
         }
         foreach ($updates as $name => $value) {
             $pattern = '/^'.preg_quote($name, '/').'=.*$/m';
-            $content = preg_match($pattern, $content) ? preg_replace_callback($pattern, fn (): string => $name.'='.$value, $content) : rtrim($content)."\n{$name}={$value}\n";
+            $content = preg_match($pattern, $content)
+                ? preg_replace_callback($pattern, fn (): string => $name.'='.$value, $content)
+                : rtrim($content)."\n{$name}={$value}\n";
         }
         file_put_contents($path, $content, LOCK_EX);
         chmod($path, 0600);
         $this->callSilent('config:clear');
-        $this->info('Demo payments enabled. A private signing key is configured; no real payment provider is connected.');
+        $this->info(
+            'Demo payments enabled. A private signing key is configured; no real payment provider is connected.'
+        );
 
         return self::SUCCESS;
     }

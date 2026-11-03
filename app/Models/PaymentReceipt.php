@@ -11,7 +11,17 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['fee_payment_id', 'provider', 'charge_reference', 'payment_reference', 'reported_deal_id', 'amount_minor', 'currency', 'reason', 'received_at'])]
+#[Fillable([
+    'fee_payment_id',
+    'provider',
+    'charge_reference',
+    'payment_reference',
+    'reported_deal_id',
+    'amount_minor',
+    'currency',
+    'reason',
+    'received_at',
+])]
 class PaymentReceipt extends Model
 {
     /** @use HasFactory<PaymentReceiptFactory> */
@@ -19,7 +29,12 @@ class PaymentReceipt extends Model
 
     protected function casts(): array
     {
-        return ['amount_minor' => 'integer', 'status' => PaymentReceiptStatus::class, 'received_at' => 'immutable_datetime', 'refunded_at' => 'immutable_datetime'];
+        return [
+            'amount_minor' => 'integer',
+            'status' => PaymentReceiptStatus::class,
+            'received_at' => 'immutable_datetime',
+            'refunded_at' => 'immutable_datetime',
+        ];
     }
 
     protected function amount(): Attribute

@@ -19,8 +19,13 @@ class ReviewSettlementConfirmationRequest extends FormRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        return ['decision' => ['required', Rule::in(['approve', 'reject'])],
+        return [
+            'decision' => ['required', Rule::in(['approve', 'reject'])],
             'reason' => ['nullable', 'required_if:decision,reject', 'string', 'min:8', 'max:500'],
-            'status' => ['prohibited'], 'reviewed_by' => ['prohibited'], 'reference' => ['prohibited'], 'note' => ['prohibited']];
+            'status' => ['prohibited'],
+            'reviewed_by' => ['prohibited'],
+            'reference' => ['prohibited'],
+            'note' => ['prohibited'],
+        ];
     }
 }

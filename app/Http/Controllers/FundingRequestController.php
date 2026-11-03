@@ -37,7 +37,9 @@ class FundingRequestController extends Controller
     {
         Gate::authorize('viewMarketplace', FundingRequest::class);
         $records = FundingRequest::query()->published()->where('bank_id', '!=', $request->user()->membership->bank_id)
-            ->with(['bank', 'documents', 'pendingApproval', 'pendingSelection', 'deal'])->latest('published_at')->paginate(15);
+            ->with(['bank', 'documents', 'pendingApproval', 'pendingSelection', 'deal'])
+            ->latest('published_at')
+            ->paginate(15);
         if ($this->json($request)) {
             return FundingRequestResource::collection($records);
         }
@@ -54,16 +56,25 @@ class FundingRequestController extends Controller
 
     public function store(StoreFundingRequest $request, ManageFundingRequests $action): RedirectResponse|JsonResponse
     {
-        $record = $action->create($request->user(), $request->validated())->load(['bank', 'documents', 'pendingApproval', 'pendingSelection', 'deal']);
+        $record = $action->create($request->user(), $request->validated())
+            ->load(['bank', 'documents', 'pendingApproval', 'pendingSelection', 'deal']);
         if ($this->json($request)) {
-            return (new FundingRequestResource($record))->response()->setStatusCode(201)->header('Location', route('api.funding.show', $record));
+            return (new FundingRequestResource($record))
+                ->response()
+                ->setStatusCode(201)
+                ->header('Location', route('api.funding.show', $record));
         }
 
-        return redirect()->route('funding.show', $record)->with('status', 'Draft created. Attach financial documents before requesting publication.');
+        return redirect()
+            ->route('funding.show', $record)
+            ->with('status', 'Draft created. Attach financial documents before requesting publication.');
     }
 
-    public function show(Request $request, FundingRequest $fundingRequest, DescribeWorkflowProgress $progress): View|FundingRequestResource
-    {
+    public function show(
+        Request $request,
+        FundingRequest $fundingRequest,
+        DescribeWorkflowProgress $progress,
+    ): View|FundingRequestResource {
         Gate::authorize('view', $fundingRequest);
         $fundingRequest->load(['bank', 'documents', 'pendingApproval', 'pendingSelection', 'deal']);
         if ($this->json($request)) {
@@ -78,8 +89,19 @@ class FundingRequestController extends Controller
             'data' => (new FundingRequestResource($fundingRequest))->resolve($request),
             'owned' => $owned,
             'progress' => $progress->funding($fundingRequest),
-            'activeOffers' => $owned ? $fundingRequest->offers()->where('status', OfferStatus::Active)->where('valid_until', '>', now())->count() : 0,
-            'ownOffer' => $owned ? null : Offer::query()->where('funding_request_id', $fundingRequest->id)->where('bank_id', $bankId)->latest()->first(),
+            'activeOffers' => $owned
+                ? $fundingRequest->offers()
+                    ->where('status', OfferStatus::Active)
+                    ->where('valid_until', '>', now())
+                    ->count()
+                : 0,
+            'ownOffer' => $owned
+                ? null
+                : Offer::query()
+                    ->where('funding_request_id', $fundingRequest->id)
+                    ->where('bank_id', $bankId)
+                    ->latest()
+                    ->first(),
             'history' => $owned ? $fundingRequest->approvals()->latest()->limit(10)->get() : collect(),
         ]);
     }
@@ -92,29 +114,54 @@ class FundingRequestController extends Controller
         return view('funding.form', ['record' => $fundingRequest]);
     }
 
-    public function update(UpdateFundingRequest $request, FundingRequest $fundingRequest, ManageFundingRequests $action): RedirectResponse|FundingRequestResource
-    {
-        return $this->respond($request, $action->update($request->user(), $fundingRequest, $request->validated()), 'Draft updated. Any previous publication proposal was superseded.');
+    public function update(
+        UpdateFundingRequest $request,
+        FundingRequest $fundingRequest,
+        ManageFundingRequests $action,
+    ): RedirectResponse|FundingRequestResource {
+        return $this->respond(
+            $request,
+            $action->update($request->user(), $fundingRequest, $request->validated()),
+            'Draft updated. Any previous publication proposal was superseded.',
+        );
     }
 
-    public function submit(Request $request, FundingRequest $fundingRequest, ManageFundingRequests $action): RedirectResponse|FundingRequestResource
-    {
+    public function submit(
+        Request $request,
+        FundingRequest $fundingRequest,
+        ManageFundingRequests $action,
+    ): RedirectResponse|FundingRequestResource {
         Gate::authorize('view', $fundingRequest);
 
-        return $this->respond($request, $action->submit($request->user(), $fundingRequest), 'Submitted for independent publication approval.');
+        return $this->respond(
+            $request,
+            $action->submit($request->user(), $fundingRequest),
+            'Submitted for independent publication approval.',
+        );
     }
 
-    public function cancel(Request $request, FundingRequest $fundingRequest, ManageFundingRequests $action): RedirectResponse|FundingRequestResource
-    {
+    public function cancel(
+        Request $request,
+        FundingRequest $fundingRequest,
+        ManageFundingRequests $action,
+    ): RedirectResponse|FundingRequestResource {
         Gate::authorize('view', $fundingRequest);
         Gate::authorize('proposeCancellation', $fundingRequest);
         $data = $request->validate(['reason' => ['required', 'string', 'min:5', 'max:500']]);
 
-        return $this->respond($request, $action->proposeCancellation($request->user(), $fundingRequest, $data['reason']), 'Cancellation submitted for independent approval.');
+        return $this->respond(
+            $request,
+            $action->proposeCancellation($request->user(), $fundingRequest, $data['reason']),
+            'Cancellation submitted for independent approval.',
+        );
     }
 
-    public function review(Request $request, FundingRequest $fundingRequest, FundingRequestApproval $approval, ManageFundingRequests $action): RedirectResponse|FundingRequestResource
-    {
+    public function review(
+        Request $request,
+        FundingRequest $fundingRequest,
+        FundingRequestApproval $approval,
+        ManageFundingRequests $action,
+    ): RedirectResponse|FundingRequestResource {
         Gate::authorize('view', $fundingRequest);
         abort_unless($request->user()->membership?->bank_id === $fundingRequest->bank_id, 404);
         abort_unless($approval->funding_request_id === $fundingRequest->id, 404);
@@ -123,14 +170,29 @@ class FundingRequestController extends Controller
             'reason' => ['nullable', 'required_if:decision,reject', 'string', 'min:5', 'max:500'],
         ]);
 
-        return $this->respond($request, $action->review($request->user(), $fundingRequest, $approval, $data['decision'] === 'approve', $data['reason'] ?? null), 'Request approval decision recorded.');
+        return $this->respond(
+            $request,
+            $action->review(
+                $request->user(),
+                $fundingRequest,
+                $approval,
+                $data['decision'] === 'approve',
+                $data['reason'] ?? null,
+            ),
+            'Request approval decision recorded.',
+        );
     }
 
-    private function respond(Request $request, FundingRequest $record, string $message): RedirectResponse|FundingRequestResource
-    {
+    private function respond(
+        Request $request,
+        FundingRequest $record,
+        string $message,
+    ): RedirectResponse|FundingRequestResource {
         $record->load(['bank', 'documents', 'pendingApproval', 'pendingSelection', 'deal']);
 
-        return $this->json($request) ? new FundingRequestResource($record) : redirect()->route('funding.show', $record)->with('status', $message);
+        return $this->json($request)
+            ? new FundingRequestResource($record)
+            : redirect()->route('funding.show', $record)->with('status', $message);
     }
 
     private function json(Request $request): bool

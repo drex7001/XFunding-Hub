@@ -33,12 +33,17 @@ class RecordDealActivity
         $banks = in_array($kind, ['confirmation.proposed', 'confirmation.rejected'], true)
             ? [$bankId] : [$deal->borrower_bank_id, $deal->lender_bank_id];
         $recipients = User::query()->where('active', true)->where('is_platform_admin', false)
-            ->whereHas('membership', fn (Builder $query): Builder => $query->where('active', true)->whereIn('bank_id', $banks))
+            ->whereHas(
+                'membership',
+                fn (Builder $query): Builder => $query->where('active', true)->whereIn('bank_id', $banks),
+            )
             ->with('membership.bank')->get();
         foreach ($recipients as $recipient) {
             if ($recipient->id !== $actor?->id && $recipient->hasVerifiedBankAccess()
                 && array_intersect($roles, $recipient->membership->roles) !== []) {
-                $recipient->notify(new DealActivityNotification($deal->id, $recipient->membership->bank_id, $kind, $side, $roles));
+                $recipient->notify(
+                    new DealActivityNotification($deal->id, $recipient->membership->bank_id, $kind, $side, $roles)
+                );
             }
         }
     }

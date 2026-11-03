@@ -26,7 +26,10 @@ pest()->extend(TestCase::class)
 function bankStaff(BankRole $role = BankRole::Maker, ?Bank $bank = null): User
 {
     $user = User::factory()->create();
-    BankMembership::factory()->for($user)->for($bank ?? Bank::factory()->verified()->create())->create(['roles' => [$role->value]]);
+    BankMembership::factory()
+        ->for($user)
+        ->for($bank ?? Bank::factory()->verified()->create())
+        ->create(['roles' => [$role->value]]);
 
     return $user->fresh(['membership.bank']);
 }
@@ -67,7 +70,9 @@ function instructionPayload(array $overrides = []): array
 {
     return array_replace([
         'channel' => 'swift', 'account_name' => 'Synthetic Treasury Account', 'account_number' => 'DEMO000098765432',
-        'bic' => 'DEMOLKXX', 'contact_name' => 'Synthetic Treasury Contact', 'contact_email' => 'desk@synthetic.example',
+        'bic' => 'DEMOLKXX',
+        'contact_name' => 'Synthetic Treasury Contact',
+        'contact_email' => 'desk@synthetic.example',
     ], $overrides);
 }
 
@@ -76,7 +81,8 @@ function offerPayload(SettlementInstruction $instruction, FundingRequest $reques
 {
     return array_replace([
         'rate' => '8.1250', 'collateral' => 'unsecured', 'interest_payment' => 'at_maturity',
-        'valid_until' => $request->settlement_date->endOfDay()->toIso8601String(), 'settlement_instruction_id' => $instruction->id,
+        'valid_until' => $request->settlement_date->endOfDay()->toIso8601String(),
+        'settlement_instruction_id' => $instruction->id,
     ], $overrides);
 }
 
@@ -94,7 +100,11 @@ function receivingInstructionId(FundingRequest $request): string
 
 function enableDemoPayments(): void
 {
-    config(['payments.demo_enabled' => true, 'payments.driver' => 'demo', 'payments.webhook_secret' => str_repeat('test-webhook-key-', 4)]);
+    config([
+        'payments.demo_enabled' => true,
+        'payments.driver' => 'demo',
+        'payments.webhook_secret' => str_repeat('test-webhook-key-', 4),
+    ]);
 }
 
 function paymentDeal(User $borrower): Deal
@@ -120,7 +130,9 @@ function signedPaymentNotification(array $payload, array $headers = []): TestRes
     $body = json_encode($payload, JSON_THROW_ON_ERROR);
     $timestamp = (string) now()->getTimestamp();
     $server = array_replace([
-        'CONTENT_TYPE' => 'application/json', 'HTTP_ACCEPT' => 'application/json', 'HTTP_X_PAYMENT_TIMESTAMP' => $timestamp,
+        'CONTENT_TYPE' => 'application/json',
+        'HTTP_ACCEPT' => 'application/json',
+        'HTTP_X_PAYMENT_TIMESTAMP' => $timestamp,
         'HTTP_X_PAYMENT_SIGNATURE' => hash_hmac('sha256', $timestamp.'.'.$body, config('payments.webhook_secret')),
     ], $headers);
 
@@ -133,7 +145,9 @@ function signedPaymentNotification(array $payload, array $headers = []): TestRes
 function renameBorrowerBank(Deal $deal, string $name): void
 {
     $deal->borrowerBank->update(['name' => $name]);
-    $deal->borrowerInstruction->update(['bank_profile' => SettlementInstruction::profileOf($deal->borrowerBank->fresh())]);
+    $deal->borrowerInstruction->update([
+        'bank_profile' => SettlementInstruction::profileOf($deal->borrowerBank->fresh()),
+    ]);
     $deal->update(['borrower_instruction_snapshot' => $deal->borrowerInstruction->fresh()->snapshot()]);
 }
 
@@ -155,7 +169,11 @@ function unlockedDeal(): Deal
 /** @return array{settlement_at: string, reference: string, note: string} */
 function settlementPayload(): array
 {
-    return ['settlement_at' => now()->toIso8601String(), 'reference' => 'SYNTHETIC-OFFPLATFORM-REF', 'note' => 'Private institution evidence summary.'];
+    return [
+        'settlement_at' => now()->toIso8601String(),
+        'reference' => 'SYNTHETIC-OFFPLATFORM-REF',
+        'note' => 'Private institution evidence summary.',
+    ];
 }
 
 function confirmedInstitution(Deal $deal, Bank $bank): SettlementConfirmation

@@ -2,8 +2,10 @@
 
 namespace App\Actions;
 
+use App\ApprovalStatus;
 use App\BankRole;
 use App\BankStatus;
+use App\DealDisputeStatus;
 use App\DealStatus;
 use App\FundingRequestStatus;
 use App\Models\AccessRequest;
@@ -19,6 +21,7 @@ use App\Models\SettlementInstruction;
 use App\Models\User;
 use App\OfferStatus;
 use App\PaymentReceiptStatus;
+use App\SettlementInstructionStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Gate;
 
@@ -47,17 +50,67 @@ class BuildWorkQueue
     private function forOperations(): array
     {
         $actions = [];
-        foreach (Bank::query()->where('status', BankStatus::Pending)->withCount('documents')->oldest()->limit(self::LIMIT)->get() as $bank) {
-            $actions[] = $this->item('Verify institution', $bank->name, $bank->documents_count.' onboarding files', route('banks.show', $bank), 'Review', $bank->updated_at);
+        $banks = Bank::query()
+            ->where('status', BankStatus::Pending)
+            ->withCount('documents')
+            ->oldest()
+            ->limit(self::LIMIT)
+            ->get();
+        foreach ($banks as $bank) {
+            $actions[] = $this->item(
+                'Verify institution',
+                $bank->name,
+                $bank->documents_count.' onboarding files',
+                route('banks.show', $bank),
+                'Review',
+                $bank->updated_at,
+            );
         }
-        foreach (AccessRequest::query()->where('status', 'pending')->with('bank')->oldest()->limit(self::LIMIT)->get() as $request) {
-            $actions[] = $this->item('Review access request', $request->name, $request->bank->name.' · '.str_replace('_', ' ', $request->kind), route('banks.show', $request->bank).'#access', 'Review', $request->created_at);
+        $requests = AccessRequest::query()
+            ->where('status', ApprovalStatus::Pending)
+            ->with('bank')
+            ->oldest()
+            ->limit(self::LIMIT)
+            ->get();
+        foreach ($requests as $request) {
+            $actions[] = $this->item(
+                'Review access request',
+                $request->name,
+                $request->bank->name.' · '.str_replace('_', ' ', $request->kind),
+                route('banks.show', $request->bank).'#access',
+                'Review',
+                $request->created_at,
+            );
         }
-        foreach (DealDispute::query()->where('status', 'open')->oldest()->limit(self::LIMIT)->get() as $dispute) {
-            $actions[] = $this->item('Resolve settlement dispute', 'Deal '.$this->reference($dispute->deal_id), 'Reading the evidence requires an audited reason', route('disputes.operations'), 'Open', $dispute->created_at);
+        $disputes = DealDispute::query()
+            ->where('status', DealDisputeStatus::Open)
+            ->oldest()
+            ->limit(self::LIMIT)
+            ->get();
+        foreach ($disputes as $dispute) {
+            $actions[] = $this->item(
+                'Resolve settlement dispute',
+                'Deal '.$this->reference($dispute->deal_id),
+                'Reading the evidence requires an audited reason',
+                route('disputes.operations'),
+                'Open',
+                $dispute->created_at,
+            );
         }
-        foreach (PaymentReceipt::query()->where('status', PaymentReceiptStatus::RefundReview)->oldest('received_at')->limit(self::LIMIT)->get() as $receipt) {
-            $actions[] = $this->item('Review payment exception', $receipt->currency.' '.FundingRequest::groupDecimal($receipt->amount), ucfirst(str_replace('_', ' ', (string) $receipt->reason)), route('payments.operations'), 'Open', $receipt->received_at);
+        $receipts = PaymentReceipt::query()
+            ->where('status', PaymentReceiptStatus::RefundReview)
+            ->oldest('received_at')
+            ->limit(self::LIMIT)
+            ->get();
+        foreach ($receipts as $receipt) {
+            $actions[] = $this->item(
+                'Review payment exception',
+                $receipt->currency.' '.FundingRequest::groupDecimal($receipt->amount),
+                ucfirst(str_replace('_', ' ', (string) $receipt->reason)),
+                route('payments.operations'),
+                'Open',
+                $receipt->received_at,
+            );
         }
 
         return ['actions' => $this->ordered($actions), 'waiting' => [], 'setup' => []];
@@ -71,10 +124,24 @@ class BuildWorkQueue
         if ($user->hasBankRole(BankRole::Admin)) {
             $this->addAccessRequests($user, $queue);
             if ($bank->status === BankStatus::Pending) {
-                $queue['setup'][] = $this->item('Complete onboarding', 'Institution verification', 'Upload your verification documents. Platform operations then verifies the profile and approves capabilities.', route('banks.show', $bank), 'Open bank profile', $bank->updated_at);
+                $queue['setup'][] = $this->item(
+                    'Complete onboarding',
+                    'Institution verification',
+                    'Upload your verification documents. Platform operations then verifies the profile and approves capabilities.',
+                    route('banks.show', $bank),
+                    'Open bank profile',
+                    $bank->updated_at,
+                );
             }
         } elseif ($bank->status === BankStatus::Pending) {
-            $queue['setup'][] = $this->item('Institution verification is pending', 'Institution verification', 'Marketplace, funding and deal screens open once platform operations verifies your bank.', route('banks.show', $bank), 'Open bank profile', $bank->updated_at);
+            $queue['setup'][] = $this->item(
+                'Institution verification is pending',
+                'Institution verification',
+                'Marketplace, funding and deal screens open once platform operations verifies your bank.',
+                route('banks.show', $bank),
+                'Open bank profile',
+                $bank->updated_at,
+            );
         }
         if (! $user->hasVerifiedBankAccess()) {
             return $this->finished($queue);
@@ -96,9 +163,22 @@ class BuildWorkQueue
     /** @param array<string, array<int, array<string, mixed>>> $queue */
     private function addAccessRequests(User $user, array &$queue): void
     {
-        $requests = AccessRequest::query()->where('bank_id', $user->membership->bank_id)->where('status', 'pending')->with(['bank', 'membership'])->oldest()->limit(self::LIMIT)->get();
+        $requests = AccessRequest::query()
+            ->where('bank_id', $user->membership->bank_id)
+            ->where('status', ApprovalStatus::Pending)
+            ->with(['bank', 'membership'])
+            ->oldest()
+            ->limit(self::LIMIT)
+            ->get();
         foreach ($requests as $request) {
-            $row = $this->item('Approve access request', $request->name, str_replace('_', ' ', ucfirst($request->kind)), route('banks.show', $user->membership->bank_id).'#access', 'Review', $request->created_at);
+            $row = $this->item(
+                'Approve access request',
+                $request->name,
+                str_replace('_', ' ', ucfirst($request->kind)),
+                route('banks.show', $user->membership->bank_id).'#access',
+                'Review',
+                $request->created_at,
+            );
             if (Gate::forUser($user)->allows('review', $request)) {
                 $queue['actions'][] = $row;
             } else {
@@ -113,9 +193,19 @@ class BuildWorkQueue
         $isMaker = $user->hasBankRole(BankRole::Maker);
         $isApprover = $user->hasBankRole(BankRole::Approver);
         $requests = FundingRequest::query()->where('bank_id', $user->membership->bank_id)
-            ->whereIn('status', [FundingRequestStatus::Draft, FundingRequestStatus::PendingApproval, FundingRequestStatus::Open])
+            ->whereIn('status', [
+                FundingRequestStatus::Draft,
+                FundingRequestStatus::PendingApproval,
+                FundingRequestStatus::Open,
+            ])
             ->with(['pendingApproval', 'pendingSelection.offer'])
-            ->withCount(['documents', 'offers as active_offers_count' => fn (Builder $offers): Builder => $offers->where('status', OfferStatus::Active)->where('valid_until', '>', now())])
+            ->withCount([
+                'documents',
+                'offers as active_offers_count' => fn (Builder $offers): Builder => $offers->where(
+                    'status',
+                    OfferStatus::Active,
+                )->where('valid_until', '>', now()),
+            ])
             ->latest()->limit(self::LIMIT)->get();
         foreach ($requests as $request) {
             if ($request->currentStatus() === FundingRequestStatus::Expired) {
@@ -127,14 +217,32 @@ class BuildWorkQueue
             $selection = $request->pendingSelection;
             if ($approval !== null) {
                 $task = $approval->kind === 'publish' ? 'Approve publication' : 'Approve cancellation';
-                $row = $this->item($task, $request->title, $this->amount($request), $show, 'Review', $approval->created_at, $request->bidding_deadline);
+                $row = $this->item(
+                    $task,
+                    $request->title,
+                    $this->amount($request),
+                    $show,
+                    'Review',
+                    $approval->created_at,
+                    $request->bidding_deadline,
+                );
                 if (Gate::forUser($user)->allows('review', $request)) {
                     $queue['actions'][] = $row;
                 } else {
                     $queue['waiting'][] = ['note' => 'Waiting for an independent treasury approver'] + $row;
                 }
             } elseif ($selection !== null) {
-                $row = $this->item('Approve offer selection', $request->title, 'Offer '.$selection->offer->label_number.' · '.$selection->offer->rate.'% · '.$this->amount($request), $compare, 'Review', $selection->created_at, $request->bidding_deadline);
+                $row = $this->item(
+                    'Approve offer selection',
+                    $request->title,
+                    'Offer '.$selection->offer->label_number.' · '.$selection->offer->rate.'% · '.$this->amount(
+                        $request
+                    ),
+                    $compare,
+                    'Review',
+                    $selection->created_at,
+                    $request->bidding_deadline,
+                );
                 if ($isApprover && $selection->proposed_by !== $user->id) {
                     $queue['actions'][] = $row;
                 } else {
@@ -142,9 +250,28 @@ class BuildWorkQueue
                 }
             } elseif ($request->status === FundingRequestStatus::Draft && $isMaker) {
                 $ready = $request->documents_count > 0;
-                $queue['actions'][] = $this->item($ready ? 'Submit for approval' : 'Attach financial documents', $request->title, $this->amount($request), $show, $ready ? 'Open draft' : 'Add files', $request->updated_at);
-            } elseif ($request->status === FundingRequestStatus::Open && $isMaker && $request->active_offers_count > 0) {
-                $queue['actions'][] = $this->item('Compare offers', $request->title, $request->active_offers_count.' available · '.$this->amount($request), $compare, 'Compare', $request->published_at, $request->bidding_deadline);
+                $queue['actions'][] = $this->item(
+                    $ready ? 'Submit for approval' : 'Attach financial documents',
+                    $request->title,
+                    $this->amount($request),
+                    $show,
+                    $ready ? 'Open draft' : 'Add files',
+                    $request->updated_at,
+                );
+            } elseif (
+                $request->status === FundingRequestStatus::Open
+                && $isMaker
+                && $request->active_offers_count > 0
+            ) {
+                $queue['actions'][] = $this->item(
+                    'Compare offers',
+                    $request->title,
+                    $request->active_offers_count.' available · '.$this->amount($request),
+                    $compare,
+                    'Compare',
+                    $request->published_at,
+                    $request->bidding_deadline,
+                );
             }
         }
     }
@@ -152,22 +279,43 @@ class BuildWorkQueue
     /** @param array<string, array<int, array<string, mixed>>> $queue */
     private function addOffers(User $user, array &$queue): void
     {
-        $offers = Offer::query()->where('bank_id', $user->membership->bank_id)->whereIn('status', [OfferStatus::Draft, OfferStatus::PendingApproval])
+        $offers = Offer::query()
+            ->where('bank_id', $user->membership->bank_id)
+            ->whereIn('status', [OfferStatus::Draft, OfferStatus::PendingApproval])
             ->with(['fundingRequest', 'pendingApproval'])->latest()->limit(self::LIMIT)->get();
         foreach ($offers as $offer) {
-            if ($offer->fundingRequest->currentStatus() !== FundingRequestStatus::Open || ! $offer->valid_until->isFuture()) {
+            if (
+                $offer->fundingRequest->currentStatus() !== FundingRequestStatus::Open
+                || ! $offer->valid_until->isFuture()
+            ) {
                 continue;
             }
             $detail = $offer->rate.'% · '.$offer->fundingRequest->borrower_profile['name'];
             $title = $offer->fundingRequest->title;
             if ($offer->status === OfferStatus::Draft) {
                 if ($user->hasBankRole(BankRole::Maker)) {
-                    $queue['actions'][] = $this->item('Send offer for approval', $title, $detail, route('offers.show', $offer), 'Open offer', $offer->updated_at, $offer->fundingRequest->bidding_deadline);
+                    $queue['actions'][] = $this->item(
+                        'Send offer for approval',
+                        $title,
+                        $detail,
+                        route('offers.show', $offer),
+                        'Open offer',
+                        $offer->updated_at,
+                        $offer->fundingRequest->bidding_deadline,
+                    );
                 }
 
                 continue;
             }
-            $row = $this->item('Approve offer', $title, $detail, route('offers.show', $offer), 'Review', $offer->updated_at, $offer->fundingRequest->bidding_deadline);
+            $row = $this->item(
+                'Approve offer',
+                $title,
+                $detail,
+                route('offers.show', $offer),
+                'Review',
+                $offer->updated_at,
+                $offer->fundingRequest->bidding_deadline,
+            );
             if (Gate::forUser($user)->allows('review', $offer)) {
                 $queue['actions'][] = $row;
             } else {
@@ -179,18 +327,43 @@ class BuildWorkQueue
     /** @param array<string, array<int, array<string, mixed>>> $queue */
     private function addInstructions(User $user, array &$queue): void
     {
-        $instructions = SettlementInstruction::query()->where('bank_id', $user->membership->bank_id)->whereIn('status', ['pending', 'approved'])->with('bank')->latest('version')->limit(self::LIMIT)->get();
-        foreach ($instructions->where('status', 'pending') as $instruction) {
-            $row = $this->item('Approve settlement instructions', 'Version '.$instruction->version, strtoupper($instruction->details['channel']), route('instructions.show', $instruction), 'Review', $instruction->created_at);
+        $instructions = SettlementInstruction::query()
+            ->where('bank_id', $user->membership->bank_id)
+            ->whereIn('status', [SettlementInstructionStatus::Pending, SettlementInstructionStatus::Approved])
+            ->with('bank')
+            ->latest('version')
+            ->limit(self::LIMIT)
+            ->get();
+        foreach ($instructions->where('status', SettlementInstructionStatus::Pending) as $instruction) {
+            $row = $this->item(
+                'Approve settlement instructions',
+                'Version '.$instruction->version,
+                strtoupper($instruction->details['channel']),
+                route('instructions.show', $instruction),
+                'Review',
+                $instruction->created_at,
+            );
             if (Gate::forUser($user)->allows('review', $instruction)) {
                 $queue['actions'][] = $row;
             } else {
                 $queue['waiting'][] = ['note' => 'Waiting for an independent treasury approver'] + $row;
             }
         }
-        $hasCurrentVersion = $instructions->where('status', 'approved')->contains(fn (SettlementInstruction $record): bool => $record->matchesBankProfile());
-        if (! $hasCurrentVersion && $instructions->where('status', 'pending')->isEmpty() && $user->hasBankRole(BankRole::Maker)) {
-            $queue['setup'][] = $this->item('Add settlement instructions', 'Approved banking details', 'Offers and selections need an approved account version. Propose one for independent approval.', route('instructions.index'), 'Manage instructions', now());
+        $hasCurrentVersion = $instructions->where('status', SettlementInstructionStatus::Approved)
+            ->contains(fn (SettlementInstruction $record): bool => $record->matchesBankProfile());
+        if (
+            ! $hasCurrentVersion
+            && $instructions->where('status', SettlementInstructionStatus::Pending)->isEmpty()
+            && $user->hasBankRole(BankRole::Maker)
+        ) {
+            $queue['setup'][] = $this->item(
+                'Add settlement instructions',
+                'Approved banking details',
+                'Offers and selections need an approved account version. Propose one for independent approval.',
+                route('instructions.index'),
+                'Manage instructions',
+                now(),
+            );
         }
     }
 
@@ -198,7 +371,11 @@ class BuildWorkQueue
     private function addDeals(User $user, array &$queue): void
     {
         $bankId = $user->membership->bank_id;
-        $deals = Deal::query()->where(fn (Builder $query): Builder => $query->where('borrower_bank_id', $bankId)->orWhere('lender_bank_id', $bankId))
+        $deals = Deal::query()
+            ->where(
+                fn (Builder $query): Builder => $query->where('borrower_bank_id', $bankId)
+                    ->orWhere('lender_bank_id', $bankId)
+            )
             ->whereIn('status', [DealStatus::AwaitingFee, DealStatus::Unlocked, DealStatus::Disputed])
             ->withWorkflowContext()->latest()->limit(self::LIMIT)->get();
         foreach ($deals as $deal) {
@@ -207,10 +384,19 @@ class BuildWorkQueue
             }
             $side = $deal->sideOf($bankId);
             $title = $deal->fundingRequest->title;
-            $detail = $deal->labelFor($bankId).' · '.$deal->terms['rate'].'% · '.$deal->terms['currency'].' '.FundingRequest::groupDecimal($deal->terms['amount']);
+            $amount = $deal->terms['currency'].' '.FundingRequest::groupDecimal($deal->terms['amount']);
+            $detail = $deal->labelFor($bankId).' · '.$deal->terms['rate'].'% · '.$amount;
             $url = route('deals.show', $deal);
             $step = $this->dealStep($user, $deal, $side);
-            $row = $this->item($step['task'], $title, $detail, $url, $step['cta'] ?? 'Open deal', $deal->updated_at, $step['due'] ?? null);
+            $row = $this->item(
+                $step['task'],
+                $title,
+                $detail,
+                $url,
+                $step['cta'] ?? 'Open deal',
+                $deal->updated_at,
+                $step['due'] ?? null,
+            );
             if ($step['action']) {
                 $queue['actions'][] = $row;
             } else {
@@ -228,42 +414,85 @@ class BuildWorkQueue
         if ($change !== null) {
             return $change->side === $side && Gate::forUser($user)->allows('review', $change)
                 ? ['task' => 'Review instruction update', 'action' => true, 'cta' => 'Review']
-                : ['task' => 'Instruction update', 'action' => false, 'note' => 'Waiting for an independent instruction review'];
+                : [
+                    'task' => 'Instruction update',
+                    'action' => false,
+                    'note' => 'Waiting for an independent instruction review',
+                ];
         }
         if ($deal->status === DealStatus::AwaitingFee) {
             return $this->feeStep($user, $deal, $side);
         }
-        if ($side === 'borrower' && $deal->borrower_settlement_instruction_id === null && $deal->status === DealStatus::Unlocked) {
+        if (
+            $side === 'borrower'
+            && $deal->borrower_settlement_instruction_id === null
+            && $deal->status === DealStatus::Unlocked
+        ) {
             return $isMaker
                 ? ['task' => 'Add receiving instructions', 'action' => true, 'cta' => 'Add']
-                : ['task' => 'Receiving instructions', 'action' => false, 'note' => 'Waiting for a treasury maker to add the receiving account'];
+                : [
+                    'task' => 'Receiving instructions',
+                    'action' => false,
+                    'note' => 'Waiting for a treasury maker to add the receiving account',
+                ];
         }
-        $own = $deal->confirmations->first(fn (SettlementConfirmation $record): bool => $record->bank_id === $user->membership->bank_id && in_array($record->status, ['pending', 'approved'], true));
-        if ($own?->status === 'pending') {
+        $own = $deal->confirmations->first(
+            fn (SettlementConfirmation $record): bool => $record->bank_id === $user->membership->bank_id
+                && $record->isCurrent()
+        );
+        if ($own?->status === ApprovalStatus::Pending) {
             return $isApprover && $own->proposed_by !== $user->id
                 ? ['task' => 'Review settlement confirmation', 'action' => true, 'cta' => 'Review']
-                : ['task' => 'Settlement confirmation', 'action' => false, 'note' => 'Waiting for an independent treasury approver'];
+                : [
+                    'task' => 'Settlement confirmation',
+                    'action' => false,
+                    'note' => 'Waiting for an independent treasury approver',
+                ];
         }
         if ($own === null && $isMaker && $deal->settlementReady()) {
-            return ['task' => $side === 'lender' ? 'Send principal and confirm' : 'Confirm principal received', 'action' => true, 'cta' => 'Open deal'];
+            return [
+                'task' => $side === 'lender' ? 'Send principal and confirm' : 'Confirm principal received',
+                'action' => true,
+                'cta' => 'Open deal',
+            ];
         }
         if ($deal->status === DealStatus::Disputed) {
             return ['task' => 'Settlement dispute', 'action' => false, 'note' => 'Under platform operations review'];
         }
 
-        return ['task' => 'Settlement', 'action' => false, 'note' => $own === null ? 'Waiting for your treasury team to confirm' : 'Waiting for the other institution to confirm'];
+        return [
+            'task' => 'Settlement',
+            'action' => false,
+            'note' => $own === null
+                ? 'Waiting for your treasury team to confirm'
+                : 'Waiting for the other institution to confirm',
+        ];
     }
 
     /** @return array{task: string, action: bool, note?: string, cta?: string, due?: mixed} */
     private function feeStep(User $user, Deal $deal, string $side): array
     {
         if ($side === 'lender') {
-            return ['task' => 'Platform fee', 'action' => false, 'note' => 'Waiting for the borrower to pay the platform fee', 'due' => $deal->fee_deadline];
+            return [
+                'task' => 'Platform fee',
+                'action' => false,
+                'note' => 'Waiting for the borrower to pay the platform fee',
+                'due' => $deal->fee_deadline,
+            ];
         }
         if ($deal->borrower_settlement_instruction_id === null) {
             return $user->hasBankRole(BankRole::Maker)
-                ? ['task' => 'Add receiving instructions', 'action' => true, 'cta' => 'Add', 'due' => $deal->fee_deadline]
-                : ['task' => 'Receiving instructions', 'action' => false, 'note' => 'Waiting for a treasury maker to add the receiving account'];
+                ? [
+                    'task' => 'Add receiving instructions',
+                    'action' => true,
+                    'cta' => 'Add',
+                    'due' => $deal->fee_deadline,
+                ]
+                : [
+                    'task' => 'Receiving instructions',
+                    'action' => false,
+                    'note' => 'Waiting for a treasury maker to add the receiving account',
+                ];
         }
         if ($deal->isReadyForPayment() && Gate::forUser($user)->allows('create', [FeePayment::class, $deal])) {
             return ['task' => 'Pay platform fee', 'action' => true, 'cta' => 'Pay', 'due' => $deal->fee_deadline];
@@ -282,7 +511,11 @@ class BuildWorkQueue
      */
     private function finished(array $queue): array
     {
-        return ['actions' => $this->ordered($queue['actions']), 'waiting' => $this->ordered($queue['waiting']), 'setup' => $queue['setup']];
+        return [
+            'actions' => $this->ordered($queue['actions']),
+            'waiting' => $this->ordered($queue['waiting']),
+            'setup' => $queue['setup'],
+        ];
     }
 
     /**
@@ -302,9 +535,24 @@ class BuildWorkQueue
     }
 
     /** @return array<string, mixed> */
-    private function item(string $task, string $title, string $detail, string $url, string $cta, mixed $at, mixed $due = null): array
-    {
-        return ['task' => $task, 'title' => $title, 'detail' => $detail, 'url' => $url, 'cta' => $cta, 'at' => $at, 'due' => $due];
+    private function item(
+        string $task,
+        string $title,
+        string $detail,
+        string $url,
+        string $cta,
+        mixed $at,
+        mixed $due = null,
+    ): array {
+        return [
+            'task' => $task,
+            'title' => $title,
+            'detail' => $detail,
+            'url' => $url,
+            'cta' => $cta,
+            'at' => $at,
+            'due' => $due,
+        ];
     }
 
     private function amount(FundingRequest $request): string

@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\FeePayment;
 use App\Models\PaymentReceipt;
+use App\PaymentReceiptStatus;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
 
@@ -17,11 +18,15 @@ class PaymentReceiptFactory extends Factory
     {
         return [
             'fee_payment_id' => FeePayment::factory(), 'provider' => 'demo', 'charge_reference' => (string) Str::uuid(),
-            'payment_reference' => fn (array $a): string => FeePayment::query()->find($a['fee_payment_id'])?->provider_reference ?? 'XFP-'.Str::uuid(),
-            'reported_deal_id' => fn (array $a): string => FeePayment::query()->find($a['fee_payment_id'])?->deal_id ?? (string) Str::ulid(),
-            'amount_minor' => fn (array $a): int => FeePayment::query()->find($a['fee_payment_id'])?->amount_minor ?? 10000,
+            'payment_reference' => fn (array $a): string => FeePayment::query()
+                ->find($a['fee_payment_id'])?->provider_reference
+                ?? 'XFP-'.Str::uuid(),
+            'reported_deal_id' => fn (array $a): string => FeePayment::query()->find($a['fee_payment_id'])?->deal_id
+                ?? (string) Str::ulid(),
+            'amount_minor' => fn (array $a): int => FeePayment::query()->find($a['fee_payment_id'])?->amount_minor
+                ?? 10000,
             'currency' => fn (array $a): string => FeePayment::query()->find($a['fee_payment_id'])?->currency ?? 'LKR',
-            'status' => 'refund_review', 'reason' => 'manual_review', 'received_at' => now(),
+            'status' => PaymentReceiptStatus::RefundReview, 'reason' => 'manual_review', 'received_at' => now(),
         ];
     }
 }

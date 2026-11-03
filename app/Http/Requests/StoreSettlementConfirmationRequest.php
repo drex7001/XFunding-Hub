@@ -20,7 +20,9 @@ class StoreSettlementConfirmationRequest extends FormRequest
     {
         return ['settlement_at' => ['required', 'date'], 'reference' => ['nullable', 'string', 'min:3', 'max:100'],
             'note' => ['nullable', 'string', 'max:1000'], 'status' => ['prohibited'], 'bank_id' => ['prohibited'],
-            'proposed_by' => ['prohibited'], 'reviewed_by' => ['prohibited'], 'settlement_instruction_id' => ['prohibited'],
+            'proposed_by' => ['prohibited'],
+            'reviewed_by' => ['prohibited'],
+            'settlement_instruction_id' => ['prohibited'],
             'approved_slot' => ['prohibited'], 'pending_slot' => ['prohibited']];
     }
 }

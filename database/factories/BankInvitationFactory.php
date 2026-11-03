@@ -15,6 +15,14 @@ class BankInvitationFactory extends Factory
     /** @return array<string, mixed> */
     public function definition(): array
     {
-        return ['bank_id' => Bank::factory(), 'invited_by' => User::factory()->platformAdmin(), 'name' => fake()->name(), 'email' => fake()->unique()->safeEmail(), 'roles' => [BankRole::Maker->value], 'token_hash' => hash('sha256', Str::random(64)), 'expires_at' => now()->addDays(3)];
+        return [
+            'bank_id' => Bank::factory(),
+            'invited_by' => User::factory()->platformAdmin(),
+            'name' => fake()->name(),
+            'email' => fake()->unique()->safeEmail(),
+            'roles' => [BankRole::Maker->value],
+            'token_hash' => hash('sha256', Str::random(64)),
+            'expires_at' => now()->addDays(3),
+        ];
     }
 }

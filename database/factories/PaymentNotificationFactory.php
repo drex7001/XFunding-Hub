@@ -18,8 +18,10 @@ class PaymentNotificationFactory extends Factory
         return [
             'fee_payment_id' => FeePayment::factory(), 'provider' => 'demo', 'event_reference' => (string) Str::uuid(),
             'payload_sha256' => hash('sha256', 'synthetic notification'),
-            'payment_reference' => fn (array $a): string => FeePayment::query()->findOrFail($a['fee_payment_id'])->provider_reference,
-            'reported_deal_id' => fn (array $a): string => FeePayment::query()->findOrFail($a['fee_payment_id'])->deal_id,
+            'payment_reference' => fn (array $a): string => FeePayment::query()
+                ->findOrFail($a['fee_payment_id'])->provider_reference,
+            'reported_deal_id' => fn (array $a): string => FeePayment::query()
+                ->findOrFail($a['fee_payment_id'])->deal_id,
             'outcome' => 'ignored',
         ];
     }

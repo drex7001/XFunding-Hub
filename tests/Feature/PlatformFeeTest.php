@@ -30,7 +30,8 @@ it('quotes the approved ten basis points in loan currency and freezes pricing', 
 });
 
 it('rounds fees upwards to an exact minor unit and caps the payment deadline at offer expiry', function () {
-    $deal = Deal::factory()->create(['terms' => ['amount' => '0.01', 'currency' => 'USD'], 'offer_valid_until' => now()->addHours(2)]);
+    $deal = Deal::factory()
+        ->create(['terms' => ['amount' => '0.01', 'currency' => 'USD'], 'offer_valid_until' => now()->addHours(2)]);
     app(QuotePlatformFee::class)->handle($deal);
 
     expect($deal->fresh()->fee_amount_minor)->toBe(1);
@@ -55,7 +56,10 @@ it('initiates a single server priced payment attempt and returns it on a repeate
     $deal = paymentDeal($approver);
     signInUser($approver);
 
-    $first = $this->postJson(route('api.payments.store', $deal))->assertCreated()->assertJsonPath('data.amount', '250000.00')->assertJsonPath('data.currency', 'LKR');
+    $first = $this->postJson(route('api.payments.store', $deal))
+        ->assertCreated()
+        ->assertJsonPath('data.amount', '250000.00')
+        ->assertJsonPath('data.currency', 'LKR');
     $this->postJson(route('api.payments.store', $deal))->assertOk()->assertJsonPath('data.id', $first->json('data.id'));
     $this->assertDatabaseCount('fee_payments', 1);
     expect($deal->fresh()->status)->toBe(DealStatus::AwaitingFee);
@@ -82,7 +86,9 @@ it('rejects forged payment amounts currencies and paid flags with 422', function
     $deal = paymentDeal($approver);
     signInUser($approver);
 
-    $this->postJson(route('api.payments.store', $deal), ['amount' => '1.00', 'currency' => 'USD', 'paid' => true])->assertUnprocessable()->assertJsonValidationErrors(['amount', 'currency', 'paid']);
+    $this->postJson(route('api.payments.store', $deal), ['amount' => '1.00', 'currency' => 'USD', 'paid' => true])
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors(['amount', 'currency', 'paid']);
     $this->assertDatabaseCount('fee_payments', 0);
 });
 
@@ -144,7 +150,8 @@ it('rejects invalid fee policy configuration without persisting a partial quote'
     $deal = Deal::factory()->create();
     config(['payments.fee_basis_points' => 0]);
 
-    expect(fn () => app(QuotePlatformFee::class)->handle($deal))->toThrow(LogicException::class, 'Invalid demo fee policy.');
+    expect(fn () => app(QuotePlatformFee::class)->handle($deal))
+        ->toThrow(LogicException::class, 'Invalid demo fee policy.');
     expect($deal->fresh()->fee_amount_minor)->toBeNull();
 });
 
@@ -161,7 +168,9 @@ it('disables new payment attempts when the demo provider is disabled with 404', 
 it('delivers synthetic confirmation through the same signature validation boundary', function (bool $useReference) {
     $payment = feePaymentAttempt();
 
-    $this->artisan('payments:simulate', ['payment' => $useReference ? $payment->provider_reference : $payment->id])->expectsOutput('Synthetic notification result: verified.')->assertSuccessful();
+    $this->artisan('payments:simulate', ['payment' => $useReference ? $payment->provider_reference : $payment->id])
+        ->expectsOutput('Synthetic notification result: verified.')
+        ->assertSuccessful();
     expect($payment->deal->fresh()->hasVerifiedFee())->toBeTrue();
 })->with(['payment ID' => false, 'visible payment reference' => true]);
 

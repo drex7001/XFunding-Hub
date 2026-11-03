@@ -23,13 +23,20 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         // A form submitted against a changed record returns to its page with the reason, not an error page.
         $exceptions->render(function (HttpException $exception, Request $request) {
-            if ($exception->getStatusCode() !== 409 || $request->isMethodSafe() || $request->expectsJson() || $request->is('api/*')) {
+            if (
+                $exception->getStatusCode() !== 409
+                || $request->isMethodSafe()
+                || $request->expectsJson()
+                || $request->is('api/*')
+            ) {
                 return null;
             }
 
             return back(fallback: route('dashboard'))
                 ->withInput($request->except(['password', 'password_confirmation', 'document', '_token', '_method']))
-                ->withErrors(['conflict' => $exception->getMessage() ?: 'This action is no longer available. Refresh the page and try again.']);
+                ->withErrors([
+                    'conflict' => $exception->getMessage() ?: 'This action is no longer available. Refresh the page and try again.',
+                ]);
         });
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),

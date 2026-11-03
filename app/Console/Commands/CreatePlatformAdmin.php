@@ -16,7 +16,10 @@ class CreatePlatformAdmin extends Command
     public function handle(ManagePlatformAccounts $action): int
     {
         try {
-            $data = Validator::make($this->arguments(), ['email' => ['required', 'email', 'max:255'], 'name' => ['required', 'string', 'max:120']])->validate();
+            $data = Validator::make($this->arguments(), [
+                'email' => ['required', 'email', 'max:255'],
+                'name' => ['required', 'string', 'max:120'],
+            ])->validate();
             $action->create(null, $data['name'], $data['email'], 'Provisioned from the server console.');
         } catch (ValidationException $exception) {
             $this->error($exception->validator->errors()->first());

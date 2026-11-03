@@ -1,5 +1,5 @@
 @php
-    $status = $data['status'];
+    $status = $record->currentStatus();
     $can = $data['can'];
     $terms = $data['terms'];
     $fee = $data['fee'];
@@ -7,7 +7,7 @@
     $otherInstitution = $isLender ? 'borrower' : 'lender';
     $ownChange = $data['instructionChange'] ?? null;
     $reviewable = collect($confirmations)->first(fn (array $confirmation): bool => $confirmation['canReview']);
-    $ownConfirmation = collect($confirmations)->first(fn (array $confirmation): bool => in_array($confirmation['status'], ['pending', 'approved'], true));
+    $ownConfirmation = collect($confirmations)->first(fn (array $confirmation): bool => in_array($confirmation['status'], [\App\ApprovalStatus::Pending->value, \App\ApprovalStatus::Approved->value], true));
 @endphp
 <x-layout title="Selected deal">
     <x-page-header
@@ -25,15 +25,15 @@
 
     <x-stepper :steps="$progress" />
 
-    @if ($status === 'settled')
+    @if ($status === \App\DealStatus::Settled)
         <x-next-step tone="done" title="Settled">
             <p>Both institutions independently confirmed. Settlement recorded <x-when :at="$record->settled_at" />.</p>
         </x-next-step>
-    @elseif ($status === 'cancelled')
+    @elseif ($status === \App\DealStatus::Cancelled)
         <x-next-step tone="closed" title="The fee reservation is closed">
             <p>The reservation is closed. Late or unmatched funds require refund review and cannot unlock this deal.</p>
         </x-next-step>
-    @elseif ($status === 'closed_unsettled')
+    @elseif ($status === \App\DealStatus::ClosedUnsettled)
         <x-next-step tone="closed" title="Closed without settlement">
             <p>Closed without both approved confirmations. No transfer was reversed by this platform.</p>
         </x-next-step>
@@ -59,7 +59,7 @@
                 <div class="btn-row"><a class="btn btn--secondary" href="{{ route('instructions.index') }}">Manage instructions</a></div>
             @endcan
         </x-next-step>
-    @elseif ($status === 'awaiting_fee')
+    @elseif ($status === \App\DealStatus::AwaitingFee)
         @if ($can['initiatePayment'])
             <x-next-step :title="'Pay the platform fee: '.$fee['currency'].' '.\App\Models\FundingRequest::groupDecimal($fee['amount'])">
                 <p>Due by <x-when :at="$record->fee_deadline" />. Lender details unlock only after the payment provider confirms it.</p>
@@ -138,11 +138,11 @@
                 <div class="btn-row"><button class="btn btn--primary">Propose settlement confirmation</button></div>
             </form>
         </x-next-step>
-    @elseif ($ownConfirmation && $ownConfirmation['status'] === 'pending')
+    @elseif ($ownConfirmation && $ownConfirmation['status'] === \App\ApprovalStatus::Pending->value)
         <x-next-step tone="waiting" title="Your confirmation is awaiting review">
             <p>A different treasury approver at your bank must review it.</p>
         </x-next-step>
-    @elseif ($status === 'disputed')
+    @elseif ($status === \App\DealStatus::Disputed)
         <x-next-step tone="waiting" title="Dispute under operations review">
             <p>Dispute review is open. Approved attestations can be collected, but operations must record the resolution before settlement is finalized.</p>
         </x-next-step>
@@ -153,6 +153,10 @@
     @else
         <x-next-step tone="waiting" title="Settlement is in progress">
             <p>Treasury staff at both institutions confirm the off-platform transfer.</p>
+            @if ($can['viewSettlement'])
+                <p>The {{ $otherInstitution }}'s identity and account are now unlocked.</p>
+                <div class="btn-row"><a class="btn btn--secondary" href="{{ route('deals.settlement', $record) }}">Open the settlement details</a></div>
+            @endif
         </x-next-step>
     @endif
 
@@ -237,7 +241,7 @@
 
             @foreach ($disputes as $dispute)
                 <section class="panel">
-                    <div class="panel__head"><h2>Settlement dispute</h2><x-status :value="$dispute['status'] === 'open' ? 'disputed' : $dispute['status']" :label="ucfirst(str_replace('_', ' ', $dispute['status']))" /></div>
+                    <div class="panel__head"><h2>Settlement dispute</h2><x-status :value="$dispute['status'] === \App\DealDisputeStatus::Open->value ? 'disputed' : $dispute['status']" :label="ucfirst(str_replace('_', ' ', $dispute['status']))" /></div>
                     @isset ($dispute['description'])
                         <p class="long-text">{{ $dispute['description'] }}</p>
                     @endisset
@@ -248,12 +252,6 @@
             @endforeach
             <section class="panel">
                 <h2>Timeline</h2>
-                <h3 class="subhead">Selection and fee milestones</h3>
-                <ol class="timeline">
-                    @foreach ($milestones as $milestone)
-                        <li><strong>{{ $milestone['message'] }}</strong><small><x-when :at="$milestone['at']" /></small></li>
-                    @endforeach
-                </ol>
                 @if ($events->isNotEmpty())
                     <h3 class="subhead">Settlement activity</h3>
                     <ol class="timeline">
@@ -263,6 +261,12 @@
                     </ol>
                     {{ $events->links() }}
                 @endif
+                <h3 class="subhead">Selection and fee milestones</h3>
+                <ol class="timeline">
+                    @foreach (collect($milestones)->reverse() as $milestone)
+                        <li><strong>{{ $milestone['message'] }}</strong><small><x-when :at="$milestone['at']" /></small></li>
+                    @endforeach
+                </ol>
             </section>
         </div>
 

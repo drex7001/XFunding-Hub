@@ -3,12 +3,12 @@
         title="Review settlement evidence"
         :back="route('disputes.operations')"
         back-label="Settlement disputes"
-        :status="$data['status'] === 'open' ? 'disputed' : $data['status']"
+        :status="$record->status === \App\DealDisputeStatus::Open ? 'disputed' : $record->status"
         :status-label="ucfirst(str_replace('_', ' ', $data['status']))"
         :meta="'Deal '.strtoupper(substr($data['dealId'], -8)).' · This access is audited'"
     />
 
-    @if ($data['status'] === 'open')
+    @if ($record->status === \App\DealDisputeStatus::Open)
         <x-next-step :title="$data['canSettle'] ? 'Record the settled outcome' : 'Record the closing outcome'">
             @unless ($data['canSettle'])
                 <p>A settled outcome requires both current approved confirmations from eligible institutions, with no instruction review pending.@if ($data['pendingInstructionReview']) Closing supersedes the pending instruction review.@endif</p>

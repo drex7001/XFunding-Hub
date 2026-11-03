@@ -32,7 +32,9 @@ it('notifies eligible own-bank approvers of pending confirmation without identit
     signInUser($approver);
     $response = $this->getJson(route('api.notifications.index'))->assertOk()->assertJsonCount(1, 'data');
     expect($response->getContent())->toContain('awaits independent review')
-        ->not->toContain($deal->lenderBank->name)->not->toContain('SYNTHETIC-OFFPLATFORM-REF')->not->toContain('Private institution');
+        ->not->toContain($deal->lenderBank->name)->not->toContain(
+            'SYNTHETIC-OFFPLATFORM-REF'
+        )->not->toContain('Private institution');
     expect(DatabaseNotification::query()->value('data'))->not->toContain('SYNTHETIC-OFFPLATFORM-REF');
 });
 
@@ -43,7 +45,12 @@ it('sends generic outcome notifications to both institutions while omitting revo
     $revoked = bankStaff(BankRole::Approver, $deal->lenderBank);
     $revoked->membership->update(['active' => false]);
     confirmedInstitution($deal, $deal->borrowerBank);
-    expect($own->notifications()->count())->toBe(1)->and($other->notifications()->count())->toBe(1)->and($revoked->notifications()->count())->toBe(0);
+    expect($own->notifications()->count())
+        ->toBe(1)
+        ->and($other->notifications()->count())
+        ->toBe(1)
+        ->and($revoked->notifications()->count())
+        ->toBe(0);
     signInUser($other);
     $this->get(route('notifications.index'))->assertOk()->assertSee('Borrower settlement confirmation approved.');
 });
@@ -51,7 +58,8 @@ it('sends generic outcome notifications to both institutions while omitting revo
 it('rechecks current notification roles and scopes read acknowledgements to the recipient', function () {
     $deal = unlockedDeal();
     $approver = bankStaff(BankRole::Approver, $deal->borrowerBank);
-    app(ManageSettlementConfirmations::class)->propose(bankStaff(BankRole::Maker, $deal->borrowerBank), $deal, settlementPayload());
+    app(ManageSettlementConfirmations::class)
+        ->propose(bankStaff(BankRole::Maker, $deal->borrowerBank), $deal, settlementPayload());
     $notification = $approver->notifications()->firstOrFail();
     signInUser(bankStaff(BankRole::Approver, $deal->borrowerBank));
     $this->postJson(route('api.notifications.read', $notification->id))->assertNotFound();
@@ -67,7 +75,10 @@ it('keeps pre-fee timelines anonymous and limits timeline reads to participants'
     $borrower = bankStaff();
     $deal = paymentDeal($borrower);
     signInUser($borrower);
-    $response = $this->getJson(route('api.deals.timeline', $deal))->assertOk()->assertJsonCount(2, 'milestones')->assertHeader('Cache-Control', 'no-store, private');
+    $response = $this->getJson(route('api.deals.timeline', $deal))
+        ->assertOk()
+        ->assertJsonCount(2, 'milestones')
+        ->assertHeader('Cache-Control', 'no-store, private');
     expect($response->getContent())->not->toContain($deal->lenderBank->name)->not->toContain('DEMO000012345678');
     signInUser(bankStaff());
     $this->getJson(route('api.deals.timeline', $deal))->assertNotFound();
@@ -84,7 +95,10 @@ it('paginates immutable timeline events with bounded query counts', function () 
     $initial = count(DB::getQueryLog());
     DealEvent::factory()->count(30)->create(['deal_id' => $deal->id]);
     DB::flushQueryLog();
-    $response = $this->getJson(route('api.deals.timeline', $deal))->assertOk()->assertJsonCount(25, 'data')->assertJsonPath('meta.total', 32);
+    $response = $this->getJson(route('api.deals.timeline', $deal))
+        ->assertOk()
+        ->assertJsonCount(25, 'data')
+        ->assertJsonPath('meta.total', 32);
     $expanded = count(DB::getQueryLog());
     DB::disableQueryLog();
     expect($expanded)->toBeLessThanOrEqual($initial + 1);
@@ -95,11 +109,20 @@ it('does not copy private confirmation or dispute content to timelines and audit
     $deal = unlockedDeal();
     $maker = bankStaff(BankRole::Maker, $deal->borrowerBank);
     app(ManageSettlementConfirmations::class)->propose($maker, $deal, settlementPayload());
-    app(ManageDealDisputes::class)->open(bankStaff(BankRole::Approver, $deal->borrowerBank), $deal, 'SECRET-DISPUTE synthetic settlement discrepancy.');
+    app(ManageDealDisputes::class)
+        ->open(
+            bankStaff(BankRole::Approver, $deal->borrowerBank),
+            $deal,
+            'SECRET-DISPUTE synthetic settlement discrepancy.',
+        );
     signInUser(bankStaff(BankRole::Maker, $deal->lenderBank));
     $response = $this->getJson(route('api.deals.timeline', $deal))->assertOk();
-    expect($response->getContent())->not->toContain('SYNTHETIC-OFFPLATFORM-REF')->not->toContain('SECRET-DISPUTE')->not->toContain($maker->name);
-    expect(AuditEvent::query()->where('subject_type', $deal->getMorphClass())->pluck('context')->toJson())->not->toContain('SYNTHETIC-OFFPLATFORM-REF')->not->toContain('SECRET-DISPUTE');
+    expect($response->getContent())->not->toContain(
+        'SYNTHETIC-OFFPLATFORM-REF'
+    )->not->toContain('SECRET-DISPUTE')->not->toContain($maker->name);
+    expect(
+        AuditEvent::query()->where('subject_type', $deal->getMorphClass())->pluck('context')->toJson()
+    )->not->toContain('SYNTHETIC-OFFPLATFORM-REF')->not->toContain('SECRET-DISPUTE');
 });
 
 it('prevents modification and deletion of persisted timeline events', function () {
@@ -116,10 +139,17 @@ it('escapes private attestation and privileged dispute content in HTML', functio
     $record = $deal->confirmations()->firstOrFail();
     $record->update(['reference' => $dangerous, 'note' => $dangerous]);
     signInUser(bankStaff(BankRole::Approver, $deal->borrowerBank));
-    $this->get(route('deals.show', $deal))->assertOk()->assertSee(e($dangerous), false)->assertDontSee($dangerous, false);
-    $dispute = app(ManageDealDisputes::class)->open(bankStaff(BankRole::Approver, $deal->borrowerBank), $deal, $dangerous);
+    $this->get(route('deals.show', $deal))
+        ->assertOk()
+        ->assertSee(e($dangerous), false)
+        ->assertDontSee($dangerous, false);
+    $dispute = app(ManageDealDisputes::class)
+        ->open(bankStaff(BankRole::Approver, $deal->borrowerBank), $deal, $dangerous);
     signInUser(User::factory()->platformAdmin()->create());
-    $this->post(route('disputes.review', $dispute), ['reason' => 'Inspect synthetic evidence safely.'])->assertOk()->assertSee(e($dangerous), false)->assertDontSee($dangerous, false);
+    $this->post(route('disputes.review', $dispute), ['reason' => 'Inspect synthetic evidence safely.'])
+        ->assertOk()
+        ->assertSee(e($dangerous), false)
+        ->assertDontSee($dangerous, false);
 });
 
 it('adds one synthetic pending attestation without resetting demo profiles or verification', function () {
@@ -142,11 +172,13 @@ it('refuses synthetic settlement seeding in production', function () {
 
 it('rejects stale authenticated approvals under the transaction lock', function () {
     $deal = unlockedDeal();
-    $record = app(ManageSettlementConfirmations::class)->propose(bankStaff(BankRole::Maker, $deal->borrowerBank), $deal, settlementPayload());
+    $record = app(ManageSettlementConfirmations::class)
+        ->propose(bankStaff(BankRole::Maker, $deal->borrowerBank), $deal, settlementPayload());
     $approver = bankStaff(BankRole::Approver, $deal->borrowerBank);
     User::query()->whereKey($approver->id)->increment('auth_version');
-    expect(fn () => app(ManageSettlementConfirmations::class)->review($approver, $record, true, null))->toThrow(HttpException::class);
-    expect($record->fresh()->status)->toBe('pending');
+    expect(fn () => app(ManageSettlementConfirmations::class)->review($approver, $record, true, null))
+        ->toThrow(HttpException::class);
+    expect($record->fresh()->status->value)->toBe('pending');
 });
 
 it('preserves settled proof when an additional receipt requires refund review', function () {
@@ -154,7 +186,9 @@ it('preserves settled proof when an additional receipt requires refund review', 
     confirmedInstitution($deal, $deal->borrowerBank);
     confirmedInstitution($deal->fresh(), $deal->lenderBank);
     $payment = $deal->fresh()->verifiedPayment;
-    signedPaymentNotification(paymentNotificationPayload($payment))->assertOk()->assertJsonPath('result', 'refund_review');
+    signedPaymentNotification(paymentNotificationPayload($payment))
+        ->assertOk()
+        ->assertJsonPath('result', 'refund_review');
     expect($deal->fresh()->hasVerifiedFee())->toBeTrue()->and($deal->fresh()->status->value)->toBe('settled');
 });
 

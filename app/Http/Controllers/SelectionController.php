@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\SelectOffer;
+use App\ApprovalStatus;
 use App\FundingRequestStatus;
 use App\Http\Resources\AnonymousOfferResource;
 use App\Http\Resources\DealResource;
@@ -11,6 +12,7 @@ use App\Models\Offer;
 use App\Models\SelectionProposal;
 use App\Models\SettlementInstruction;
 use App\OfferStatus;
+use App\SettlementInstructionStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -29,10 +31,23 @@ class SelectionController extends Controller
         $pending = $fundingRequest->pendingSelection?->load(['offer', 'borrowerInstruction']);
         $data = [
             'offers' => AnonymousOfferResource::collection($records->values())->resolve($request),
-            'pendingSelection' => $pending ? ['id' => $pending->id, 'offer' => (new AnonymousOfferResource($pending->offer))->resolve($request), 'receivingInstructionVersion' => $pending->borrowerInstruction?->version, 'canReview' => Gate::allows('review', $pending)] : null,
+            'pendingSelection' => $pending
+                ? [
+                    'id' => $pending->id,
+                    'offer' => (new AnonymousOfferResource($pending->offer))->resolve($request),
+                    'receivingInstructionVersion' => $pending->borrowerInstruction?->version,
+                    'canReview' => Gate::allows('review', $pending),
+                ]
+                : null,
             'deal' => $fundingRequest->deal ? (new DealResource($fundingRequest->deal))->resolve($request) : null,
-            'canPropose' => Gate::allows('create', [SelectionProposal::class, $fundingRequest]) && $fundingRequest->currentStatus() === FundingRequestStatus::Open && $fundingRequest->pendingApproval === null && $pending === null && $fundingRequest->deal === null,
-            'receivingInstructions' => Gate::allows('create', [SelectionProposal::class, $fundingRequest]) ? $this->receivingInstructions($fundingRequest) : [],
+            'canPropose' => Gate::allows('create', [SelectionProposal::class, $fundingRequest])
+                && $fundingRequest->currentStatus() === FundingRequestStatus::Open
+                && $fundingRequest->pendingApproval === null
+                && $pending === null
+                && $fundingRequest->deal === null,
+            'receivingInstructions' => Gate::allows('create', [SelectionProposal::class, $fundingRequest])
+                ? $this->receivingInstructions($fundingRequest)
+                : [],
         ];
         if ($request->expectsJson() || $request->is('api/*')) {
             return response()->json(['data' => $data]);
@@ -41,35 +56,82 @@ class SelectionController extends Controller
         return view('offers.compare', ['record' => $fundingRequest, 'data' => $data]);
     }
 
-    public function store(Request $request, FundingRequest $fundingRequest, SelectOffer $action): RedirectResponse|JsonResponse
-    {
+    public function store(
+        Request $request,
+        FundingRequest $fundingRequest,
+        SelectOffer $action,
+    ): RedirectResponse|JsonResponse {
         Gate::authorize('viewAny', [SelectionProposal::class, $fundingRequest]);
         Gate::authorize('create', [SelectionProposal::class, $fundingRequest]);
-        $data = $request->validate(['offer_token' => ['required', 'uuid'], 'settlement_instruction_id' => ['required', 'ulid'], 'offer_id' => ['prohibited'], 'lender_bank_id' => ['prohibited'], 'status' => ['prohibited']]);
-        $proposal = $action->propose($request->user(), $fundingRequest, $data['offer_token'], $data['settlement_instruction_id']);
+        $data = $request->validate([
+            'offer_token' => ['required', 'uuid'],
+            'settlement_instruction_id' => ['required', 'ulid'],
+            'offer_id' => ['prohibited'],
+            'lender_bank_id' => ['prohibited'],
+            'status' => ['prohibited'],
+        ]);
+        $proposal = $action->propose(
+            $request->user(),
+            $fundingRequest,
+            $data['offer_token'],
+            $data['settlement_instruction_id'],
+        );
 
-        return $request->expectsJson() || $request->is('api/*') ? response()->json(['data' => ['id' => $proposal->id, 'status' => 'pending']], 201) : redirect()->route('funding.offers', $fundingRequest)->with('status', 'Selection proposed. An independent borrower approver must review it.');
+        return $request->expectsJson() || $request->is('api/*')
+            ? response()->json(['data' => ['id' => $proposal->id, 'status' => ApprovalStatus::Pending->value]], 201)
+            : redirect()
+                ->route('funding.offers', $fundingRequest)
+                ->with('status', 'Selection proposed. An independent borrower approver must review it.');
     }
 
-    public function review(Request $request, FundingRequest $fundingRequest, SelectionProposal $selection, SelectOffer $action): RedirectResponse|JsonResponse
-    {
+    public function review(
+        Request $request,
+        FundingRequest $fundingRequest,
+        SelectionProposal $selection,
+        SelectOffer $action,
+    ): RedirectResponse|JsonResponse {
         Gate::authorize('viewAny', [SelectionProposal::class, $fundingRequest]);
         abort_unless($selection->funding_request_id === $fundingRequest->id, 404);
-        $data = $request->validate(['decision' => ['required', Rule::in(['approve', 'reject'])], 'reason' => ['nullable', 'required_if:decision,reject', 'string', 'min:5', 'max:500']]);
+        $data = $request->validate([
+            'decision' => ['required', Rule::in(['approve', 'reject'])],
+            'reason' => ['nullable', 'required_if:decision,reject', 'string', 'min:5', 'max:500'],
+        ]);
         $deal = $action->review($request->user(), $selection, $data['decision'] === 'approve', $data['reason'] ?? null);
         if ($request->expectsJson() || $request->is('api/*')) {
-            return response()->json(['data' => $deal ? (new DealResource($deal))->resolve($request) : ['status' => 'rejected']]);
+            return response()
+                ->json([
+                    'data' => $deal
+                        ? (new DealResource($deal))->resolve($request)
+                        : ['status' => ApprovalStatus::Rejected->value],
+                ]);
         }
 
-        return $deal ? redirect()->route('deals.show', $deal)->with('status', 'Selection approved. Lender identity remains locked pending verified platform fee.') : redirect()->route('funding.offers', $fundingRequest)->with('status', 'Selection rejected. A maker can propose another offer.');
+        return $deal
+            ? redirect()
+                ->route('deals.show', $deal)
+                ->with('status', 'Selection approved. Lender identity remains locked pending verified platform fee.')
+            : redirect()
+                ->route('funding.offers', $fundingRequest)
+                ->with('status', 'Selection rejected. A maker can propose another offer.');
     }
 
     /** @return array<int, array{id: string, version: int, channel: string}> */
     private function receivingInstructions(FundingRequest $fundingRequest): array
     {
-        return SettlementInstruction::query()->where('bank_id', $fundingRequest->bank_id)->where('status', 'approved')->with('bank')->latest('version')->get()
+        return SettlementInstruction::query()
+            ->where('bank_id', $fundingRequest->bank_id)
+            ->where('status', SettlementInstructionStatus::Approved)
+            ->with('bank')
+            ->latest('version')
+            ->get()
             ->filter(fn (SettlementInstruction $record): bool => $record->matchesBankProfile())
-            ->map(fn (SettlementInstruction $record): array => ['id' => $record->id, 'version' => $record->version, 'channel' => $record->details['channel']])
+            ->map(
+                fn (SettlementInstruction $record): array => [
+                    'id' => $record->id,
+                    'version' => $record->version,
+                    'channel' => $record->details['channel'],
+                ]
+            )
             ->values()->all();
     }
 }

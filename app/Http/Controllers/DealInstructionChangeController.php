@@ -18,19 +18,38 @@ class DealInstructionChangeController extends Controller
     {
         Gate::authorize('view', $deal);
         Gate::authorize('create', [DealInstructionChange::class, $deal]);
-        $data = $request->validate(['settlement_instruction_id' => ['required', 'ulid'], 'status' => ['prohibited'], 'instruction_snapshot' => ['prohibited']]);
+        $data = $request->validate([
+            'settlement_instruction_id' => ['required', 'ulid'],
+            'status' => ['prohibited'],
+            'instruction_snapshot' => ['prohibited'],
+        ]);
         $change = $action->propose($request->user(), $deal, $data['settlement_instruction_id']);
 
-        return $request->expectsJson() || $request->is('api/*') ? response()->json(['data' => ['id' => $change->id, 'status' => $change->status]], 201) : redirect()->route('deals.show', $deal)->with('status', 'Instruction change proposed. Independent lender approval is required.');
+        return $request->expectsJson() || $request->is('api/*')
+            ? response()->json(['data' => ['id' => $change->id, 'status' => $change->status->value]], 201)
+            : redirect()
+                ->route('deals.show', $deal)
+                ->with('status', 'Instruction change proposed. Independent lender approval is required.');
     }
 
-    public function review(Request $request, Deal $deal, DealInstructionChange $change, ChangeDealInstructions $action): RedirectResponse|DealResource
-    {
+    public function review(
+        Request $request,
+        Deal $deal,
+        DealInstructionChange $change,
+        ChangeDealInstructions $action,
+    ): RedirectResponse|DealResource {
         Gate::authorize('view', $deal);
         abort_unless($change->deal_id === $deal->id, 404);
-        $data = $request->validate(['decision' => ['required', Rule::in(['approve', 'reject'])], 'reason' => ['nullable', 'required_if:decision,reject', 'string', 'min:5', 'max:500']]);
+        $data = $request->validate([
+            'decision' => ['required', Rule::in(['approve', 'reject'])],
+            'reason' => ['nullable', 'required_if:decision,reject', 'string', 'min:5', 'max:500'],
+        ]);
         $record = $action->review($request->user(), $change, $data['decision'] === 'approve', $data['reason'] ?? null);
 
-        return $request->expectsJson() || $request->is('api/*') ? new DealResource($record) : redirect()->route('deals.show', $deal)->with('status', 'Instruction review recorded. Financial terms and fee quote remain fixed.');
+        return $request->expectsJson() || $request->is('api/*')
+            ? new DealResource($record)
+            : redirect()
+                ->route('deals.show', $deal)
+                ->with('status', 'Instruction review recorded. Financial terms and fee quote remain fixed.');
     }
 }

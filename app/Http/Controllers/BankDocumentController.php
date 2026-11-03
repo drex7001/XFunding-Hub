@@ -23,7 +23,14 @@ class BankDocumentController extends Controller
             DB::transaction(function () use ($request, $bank, $audit, $file, $path): void {
                 $bank = Bank::query()->lockForUpdate()->findOrFail($bank->id);
                 Gate::authorize('create', [BankDocument::class, $bank]);
-                $document = $bank->documents()->create(['uploaded_by' => $request->user()->id, 'original_name' => $file->getClientOriginalName(), 'path' => $path, 'mime_type' => $file->getMimeType(), 'size' => $file->getSize()]);
+                $document = $bank->documents()
+                    ->create([
+                        'uploaded_by' => $request->user()->id,
+                        'original_name' => $file->getClientOriginalName(),
+                        'path' => $path,
+                        'mime_type' => $file->getMimeType(),
+                        'size' => $file->getSize(),
+                    ]);
                 $audit->handle($request->user(), 'document.uploaded', $document);
             });
         } catch (\Throwable $exception) {
@@ -44,6 +51,10 @@ class BankDocumentController extends Controller
         abort_unless(Storage::disk('private')->exists($document->path), 404);
         $audit->handle($request->user(), 'document.downloaded', $document, $context);
 
-        return Storage::disk('private')->download($document->path, $document->original_name, ['Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff']);
+        return Storage::disk('private')
+            ->download($document->path, $document->original_name, [
+                'Cache-Control' => 'private, no-store',
+                'X-Content-Type-Options' => 'nosniff',
+            ]);
     }
 }

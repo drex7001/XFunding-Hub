@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\ApprovalStatus;
 use Database\Factories\AccessRequestFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -16,7 +17,12 @@ class AccessRequest extends Model
 
     protected function casts(): array
     {
-        return ['roles' => 'array', 'reviewed_at' => 'datetime', 'membership_version' => 'integer'];
+        return [
+            'status' => ApprovalStatus::class,
+            'roles' => 'array',
+            'reviewed_at' => 'datetime',
+            'membership_version' => 'integer',
+        ];
     }
 
     public function bank(): BelongsTo

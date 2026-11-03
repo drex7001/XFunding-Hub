@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\ApprovalStatus;
 use App\BankRole;
 use App\BankStatus;
 use App\Models\AccessRequest;
@@ -27,7 +28,9 @@ class ManageBankAccess
         Gate::forUser($actor)->authorize('create', Bank::class);
 
         return DB::transaction(function () use ($actor, $data): Bank {
-            $bank = Bank::create(collect($data)->only(['name', 'country_code', 'registration_number', 'requested_capabilities'])->all());
+            $bank = Bank::create(
+                collect($data)->only(['name', 'country_code', 'registration_number', 'requested_capabilities'])->all()
+            );
             $this->issueInvitation($actor, $bank, $data['admin_name'], $data['admin_email'], [BankRole::Admin->value]);
             $this->audit->handle($actor, 'bank.created', $bank);
 
@@ -46,14 +49,23 @@ class ManageBankAccess
      *
      * @param  array<string, mixed>  $data
      */
-    public function proposeReinstatement(User $actor, Bank $bank, array $data, BankMembership $membership): AccessRequest
-    {
+    public function proposeReinstatement(
+        User $actor,
+        Bank $bank,
+        array $data,
+        BankMembership $membership,
+    ): AccessRequest {
         return $this->recordProposal($actor, $bank, $data, $membership, 'reinstatement');
     }
 
     /** @param array<string, mixed> $data */
-    private function recordProposal(User $actor, Bank $bank, array $data, ?BankMembership $membership, string $kind): AccessRequest
-    {
+    private function recordProposal(
+        User $actor,
+        Bank $bank,
+        array $data,
+        ?BankMembership $membership,
+        string $kind,
+    ): AccessRequest {
         return DB::transaction(function () use ($actor, $bank, $data, $membership, $kind): AccessRequest {
             Bank::query()->lockForUpdate()->findOrFail($bank->id);
             $actor->refresh()->load('membership.bank');
@@ -61,7 +73,11 @@ class ManageBankAccess
             if ($membership !== null) {
                 $membership->refresh();
                 abort_unless($membership->bank_id === $bank->id, 404);
-                abort_unless($membership->active === ($kind === 'role_change'), 409, $kind === 'role_change' ? 'This membership is inactive.' : 'This membership is already active.');
+                abort_unless(
+                    $membership->active === ($kind === 'role_change'),
+                    409,
+                    $kind === 'role_change' ? 'This membership is inactive.' : 'This membership is already active.',
+                );
             }
             $roles = $data['roles'];
             sort($roles);
@@ -85,7 +101,7 @@ class ManageBankAccess
             $request = AccessRequest::query()->lockForUpdate()->findOrFail($request->id);
             $actor->refresh()->load('membership.bank');
             Gate::forUser($actor)->authorize('review', $request);
-            abort_unless($request->status === 'pending', 409, 'This request has already been reviewed.');
+            abort_unless($request->status === ApprovalStatus::Pending, 409, 'This request has already been reviewed.');
             if ($approve) {
                 abort_if($request->bank->status === BankStatus::Suspended, 409, 'This bank is suspended.');
                 if ($request->kind === 'invitation') {
@@ -93,16 +109,30 @@ class ManageBankAccess
                 } else {
                     $membership = $request->membership()->lockForUpdate()->firstOrFail();
                     $reinstating = $request->kind === 'reinstatement';
-                    abort_unless($membership->active !== $reinstating && $membership->version === $request->membership_version, 409, 'Membership changed. Submit a new request.');
+                    abort_unless(
+                        $membership->active !== $reinstating && $membership->version === $request->membership_version,
+                        409,
+                        'Membership changed. Submit a new request.',
+                    );
                     if (! $reinstating) {
                         $this->protectLastAdmin($membership, $request->roles);
                     }
-                    $membership->forceFill(['active' => true, 'roles' => $request->roles, 'version' => $membership->version + 1])->save();
+                    $membership->forceFill([
+                        'active' => true,
+                        'roles' => $request->roles,
+                        'version' => $membership->version + 1,
+                    ])->save();
                     $membership->user()->increment('auth_version');
                 }
             }
-            $request->forceFill(['status' => $approve ? 'approved' : 'rejected', 'reviewed_by' => $actor->id, 'reviewed_at' => now()])->save();
-            $this->audit->handle($actor, $approve ? 'access.approved' : 'access.rejected', $request, ['roles' => $request->roles]);
+            $request->forceFill([
+                'status' => $approve ? ApprovalStatus::Approved : ApprovalStatus::Rejected,
+                'reviewed_by' => $actor->id,
+                'reviewed_at' => now(),
+            ])->save();
+            $this->audit->handle($actor, $approve ? 'access.approved' : 'access.rejected', $request, [
+                'roles' => $request->roles,
+            ]);
 
             return $request;
         });
@@ -126,9 +156,22 @@ class ManageBankAccess
     /** @param array<int, string> $roles */
     private function protectLastAdmin(BankMembership $membership, array $roles): void
     {
-        if (in_array(BankRole::Admin->value, $membership->roles, true) && ! in_array(BankRole::Admin->value, $roles, true)) {
-            $others = $membership->bank->memberships()->where('active', true)->whereKeyNot($membership->id)->whereHas('user', fn (Builder $query): Builder => $query->where('active', true))->get();
-            abort_unless($others->contains(fn (BankMembership $other): bool => in_array(BankRole::Admin->value, $other->roles, true)), 409, 'A bank must retain an active bank admin.');
+        if (
+            in_array(BankRole::Admin->value, $membership->roles, true)
+            && ! in_array(BankRole::Admin->value, $roles, true)
+        ) {
+            $others = $membership->bank->memberships()
+                ->where('active', true)
+                ->whereKeyNot($membership->id)
+                ->whereHas('user', fn (Builder $query): Builder => $query->where('active', true))
+                ->get();
+            abort_unless(
+                $others->contains(
+                    fn (BankMembership $other): bool => in_array(BankRole::Admin->value, $other->roles, true)
+                ),
+                409,
+                'A bank must retain an active bank admin.',
+            );
         }
     }
 
@@ -136,8 +179,13 @@ class ManageBankAccess
     private function issueInvitation(User $actor, Bank $bank, string $name, string $email, array $roles): void
     {
         $existing = BankInvitation::query()->where('email', $email)->lockForUpdate()->first();
-        if (User::query()->where('email', $email)->exists() || ($existing && $existing->expires_at->isFuture() && $existing->accepted_at === null)) {
-            throw ValidationException::withMessages(['email' => 'This email already has an account or an active invitation.']);
+        if (
+            User::query()->where('email', $email)->exists()
+            || ($existing && $existing->expires_at->isFuture() && $existing->accepted_at === null)
+        ) {
+            throw ValidationException::withMessages([
+                'email' => 'This email already has an account or an active invitation.',
+            ]);
         }
         $existing?->delete();
         $token = Str::random(64);
@@ -145,7 +193,8 @@ class ManageBankAccess
             'bank_id' => $bank->id, 'invited_by' => $actor->id, 'name' => $name, 'email' => $email,
             'roles' => $roles, 'token_hash' => hash('sha256', $token), 'expires_at' => now()->addDays(3),
         ]);
-        Notification::route('mail', $email)->notify((new BankInvitationNotification($invitation, $token))->afterCommit());
+        Notification::route('mail', $email)
+            ->notify((new BankInvitationNotification($invitation, $token))->afterCommit());
         $this->audit->handle($actor, 'invitation.created', $invitation, ['roles' => $roles]);
     }
 }

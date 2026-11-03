@@ -25,14 +25,25 @@ class AuthController extends Controller
 
     public function login(LoginRequest $request, RecordAuditEvent $audit): RedirectResponse
     {
-        $credentials = ['email' => Str::lower($request->validated('email')), 'password' => $request->validated('password'), 'active' => true];
+        $credentials = [
+            'email' => Str::lower($request->validated('email')),
+            'password' => $request->validated('password'),
+            'active' => true,
+        ];
         if (! Auth::attempt($credentials)) {
-            throw ValidationException::withMessages(['email' => 'These credentials are not available. Check your email and password.']);
+            throw ValidationException::withMessages([
+                'email' => 'These credentials are not available. Check your email and password.',
+            ]);
         }
         $user = $request->user()->load('membership.bank');
-        if (! $user->is_platform_admin && (! $user->membership?->active || $user->membership->bank->status === BankStatus::Suspended)) {
+        if (
+            ! $user->is_platform_admin
+            && (! $user->membership?->active || $user->membership->bank->status === BankStatus::Suspended)
+        ) {
             Auth::logout();
-            throw ValidationException::withMessages(['email' => 'These credentials are not available. Check your email and password.']);
+            throw ValidationException::withMessages([
+                'email' => 'These credentials are not available. Check your email and password.',
+            ]);
         }
         $request->session()->regenerate();
         $request->session()->put('auth_version', $user->auth_version);
@@ -75,7 +86,11 @@ class AuthController extends Controller
             'password' => ['required', 'confirmed', PasswordRule::min(12)->mixedCase()->numbers()],
         ]);
         $status = Password::reset($data, function (User $user, string $password) use ($audit): void {
-            $user->forceFill(['password' => $password, 'remember_token' => Str::random(60), 'auth_version' => $user->auth_version + 1])->save();
+            $user->forceFill([
+                'password' => $password,
+                'remember_token' => Str::random(60),
+                'auth_version' => $user->auth_version + 1,
+            ])->save();
             $audit->handle($user, 'account.password_reset', $user);
             event(new PasswordReset($user));
         });

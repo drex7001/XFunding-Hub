@@ -18,6 +18,8 @@ class FeePaymentPolicy
 
     public function view(User $user, FeePayment $payment): Response
     {
-        return $user->hasVerifiedBankAccess() && $user->membership->bank_id === $payment->bank_id ? Response::allow() : Response::denyAsNotFound();
+        return $user->hasVerifiedBankAccess() && $user->membership->bank_id === $payment->bank_id
+            ? Response::allow()
+            : Response::denyAsNotFound();
     }
 }

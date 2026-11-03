@@ -11,12 +11,14 @@ class DealInstructionChangePolicy
 {
     public function create(User $user, Deal $deal): bool
     {
-        return $this->holdsSideCapability($user, $deal->sideOf($user->membership?->bank_id)) && $user->hasBankRole(BankRole::Maker);
+        return $this->holdsSideCapability($user, $deal->sideOf($user->membership?->bank_id))
+            && $user->hasBankRole(BankRole::Maker);
     }
 
     public function review(User $user, DealInstructionChange $change): bool
     {
-        return $change->deal->sideOf($user->membership?->bank_id) === $change->side && $this->holdsSideCapability($user, $change->side)
+        return $change->deal->sideOf($user->membership?->bank_id) === $change->side
+            && $this->holdsSideCapability($user, $change->side)
             && $user->hasBankRole(BankRole::Approver) && $change->proposed_by !== $user->id;
     }
 

@@ -26,7 +26,10 @@ class StorePlatformAccountRequest extends FormRequest
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'reason' => ['required', 'string', 'min:8', 'max:500'],
-            'password' => ['prohibited'], 'is_platform_admin' => ['prohibited'], 'active' => ['prohibited'], 'bank_id' => ['prohibited'],
+            'password' => ['prohibited'],
+            'is_platform_admin' => ['prohibited'],
+            'active' => ['prohibited'],
+            'bank_id' => ['prohibited'],
         ];
     }
 }

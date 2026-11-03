@@ -29,13 +29,24 @@ it('creates an exact rate offer and publishes it only after independent lender a
     $request = FundingRequest::factory()->published()->create();
     $instruction = SettlementInstruction::factory()->approved()->create(['bank_id' => $maker->membership->bank_id]);
     signInUser($maker);
-    $this->postJson(route('api.offers.store', $request), offerPayload($instruction, $request))->assertCreated()->assertJsonPath('data.rate', '8.1250')->assertJsonPath('data.status', 'draft');
+    $this->postJson(route('api.offers.store', $request), offerPayload($instruction, $request))
+        ->assertCreated()
+        ->assertJsonPath('data.rate', '8.1250')
+        ->assertJsonPath('data.status', 'draft');
     $offer = Offer::query()->sole();
     expect($offer->rate_units)->toBe(81250);
     $this->postJson(route('api.offers.submit', $offer))->assertOk()->assertJsonPath('data.status', 'pending_approval');
     signInUser($approver);
-    $this->postJson(route('api.offers.review', ['offer' => $offer, 'approval' => OfferApproval::query()->sole()->id]), ['decision' => 'approve'])->assertOk()->assertJsonPath('data.status', 'active');
-    $this->assertDatabaseHas('offers', ['id' => $offer->id, 'active_slot' => $maker->membership->bank_id, 'label_number' => 1]);
+    $this->postJson(route('api.offers.review', ['offer' => $offer, 'approval' => OfferApproval::query()->sole()->id]), [
+        'decision' => 'approve',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'active');
+    $this->assertDatabaseHas('offers', [
+        'id' => $offer->id,
+        'active_slot' => $maker->membership->bank_id,
+        'label_number' => 1,
+    ]);
     $this->assertDatabaseHas('audit_events', ['action' => 'offer.activated', 'bank_id' => $maker->membership->bank_id]);
 });
 
@@ -85,10 +96,14 @@ it('hides marketplace requests from users without approved lender capability wit
 it('requires own approved instructions before drafting an offer with 422', function (bool $foreign) {
     $maker = bankStaff();
     $request = FundingRequest::factory()->published()->create();
-    $instruction = $foreign ? SettlementInstruction::factory()->approved()->create() : SettlementInstruction::factory()->create(['bank_id' => $maker->membership->bank_id]);
+    $instruction = $foreign
+        ? SettlementInstruction::factory()->approved()->create()
+        : SettlementInstruction::factory()->create(['bank_id' => $maker->membership->bank_id]);
     signInUser($maker);
 
-    $this->postJson(route('api.offers.store', $request), offerPayload($instruction, $request))->assertUnprocessable()->assertJsonValidationErrors('settlement_instruction_id');
+    $this->postJson(route('api.offers.store', $request), offerPayload($instruction, $request))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('settlement_instruction_id');
     $this->assertDatabaseCount('offers', 0);
 })->with(['foreign version' => true, 'pending version' => false]);
 
@@ -98,15 +113,19 @@ it('rejects unsupported rates structured conditions and forged fields with 422',
     $instruction = SettlementInstruction::factory()->approved()->create(['bank_id' => $maker->membership->bank_id]);
     signInUser($maker);
 
-    $this->postJson(route('api.offers.store', $request), offerPayload($instruction, $request, $overrides))->assertUnprocessable()->assertJsonValidationErrors($field);
+    $this->postJson(route('api.offers.store', $request), offerPayload($instruction, $request, $overrides))
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors($field);
     $this->assertDatabaseCount('offers', 0);
 })->with([
     'numeric float' => [['rate' => 8.125], 'rate'], 'negative' => [['rate' => '-1'], 'rate'],
     'rate over cap' => [['rate' => '100.0001'], 'rate'], 'excess decimals' => [['rate' => '8.12345'], 'rate'],
-    'exponent' => [['rate' => '8e1'], 'rate'], 'unsupported collateral' => [['collateral' => 'call my bank'], 'collateral'],
+    'exponent' => [['rate' => '8e1'], 'rate'],
+    'unsupported collateral' => [['collateral' => 'call my bank'], 'collateral'],
     'unsupported payment' => [['interest_payment' => 'custom'], 'interest_payment'],
     'forged bank' => [['bank_id' => 999], 'bank_id'], 'forged status' => [['status' => 'active'], 'status'],
-    'forged token' => [['borrower_token' => 'fake'], 'borrower_token'], 'partial amount' => [['amount' => '1.00'], 'amount'],
+    'forged token' => [['borrower_token' => 'fake'], 'borrower_token'],
+    'partial amount' => [['amount' => '1.00'], 'amount'],
     'lender free text' => [['notes' => 'Contact my bank directly'], 'notes'],
 ]);
 
@@ -116,8 +135,14 @@ it('preserves permitted rate boundaries without floating point arithmetic', func
     $instruction = SettlementInstruction::factory()->approved()->create(['bank_id' => $maker->membership->bank_id]);
     signInUser($maker);
 
-    $this->postJson(route('api.offers.store', $request), offerPayload($instruction, $request, ['rate' => $rate]))->assertCreated()->assertJsonPath('data.rate', $expected);
-})->with(['zero' => ['0', '0.0000'], 'upper cap' => ['100.0000', '100.0000'], 'small fraction' => ['0.0001', '0.0001']]);
+    $this->postJson(route('api.offers.store', $request), offerPayload($instruction, $request, ['rate' => $rate]))
+        ->assertCreated()
+        ->assertJsonPath('data.rate', $expected);
+})->with([
+    'zero' => ['0', '0.0000'],
+    'upper cap' => ['100.0000', '100.0000'],
+    'small fraction' => ['0.0001', '0.0001'],
+]);
 
 it('requires offer validity to cover bidding and stay within settlement day with 422', function (string $boundary) {
     $maker = bankStaff();
@@ -129,7 +154,12 @@ it('requires offer validity to cover bidding and stay within settlement day with
     };
     signInUser($maker);
 
-    $this->postJson(route('api.offers.store', $request), offerPayload($instruction, $request, ['valid_until' => $deadline->toIso8601String()]))->assertUnprocessable()->assertJsonValidationErrors('valid_until');
+    $this->postJson(
+        route('api.offers.store', $request),
+        offerPayload($instruction, $request, ['valid_until' => $deadline->toIso8601String()]),
+    )
+        ->assertUnprocessable()
+        ->assertJsonValidationErrors('valid_until');
 })->with(['past', 'before bids close', 'after settlement']);
 
 it('blocks offer self approval and approval by another draft contributor with 403', function () {
@@ -141,9 +171,11 @@ it('blocks offer self approval and approval by another draft contributor with 40
     app(ManageOffers::class)->submit($maker->fresh(), $offer);
     $approval = OfferApproval::query()->sole();
     signInUser($maker->fresh());
-    $this->postJson(route('api.offers.review', ['offer' => $offer, 'approval' => $approval]), ['decision' => 'approve'])->assertForbidden();
+    $this->postJson(route('api.offers.review', ['offer' => $offer, 'approval' => $approval]), ['decision' => 'approve'])
+        ->assertForbidden();
     signInUser($contributor);
-    $this->postJson(route('api.offers.review', ['offer' => $offer, 'approval' => $approval]), ['decision' => 'approve'])->assertForbidden();
+    $this->postJson(route('api.offers.review', ['offer' => $offer, 'approval' => $approval]), ['decision' => 'approve'])
+        ->assertForbidden();
 });
 
 it('supersedes an offer approval when terms change and refuses replay with 409', function () {
@@ -152,26 +184,44 @@ it('supersedes an offer approval when terms change and refuses replay with 409',
     app(ManageOffers::class)->submit($maker, $offer);
     $approval = OfferApproval::query()->sole();
     signInUser($maker);
-    $this->patchJson(route('api.offers.update', $offer), offerPayload($offer->settlementInstruction, $offer->fundingRequest, ['rate' => '7.9999']))->assertOk()->assertJsonPath('data.version', 2)->assertJsonPath('data.status', 'draft');
-    expect($approval->fresh()->status)->toBe('superseded');
+    $this->patchJson(
+        route('api.offers.update', $offer),
+        offerPayload($offer->settlementInstruction, $offer->fundingRequest, ['rate' => '7.9999']),
+    )
+        ->assertOk()
+        ->assertJsonPath('data.version', 2)
+        ->assertJsonPath('data.status', 'draft');
+    expect($approval->fresh()->status->value)->toBe('superseded');
     signInUser(bankStaff(BankRole::Approver, $maker->membership->bank));
-    $this->postJson(route('api.offers.review', ['offer' => $offer, 'approval' => $approval]), ['decision' => 'approve'])->assertConflict();
+    $this->postJson(route('api.offers.review', ['offer' => $offer, 'approval' => $approval]), ['decision' => 'approve'])
+        ->assertConflict();
 });
 
 it('requires withdrawal before activating a replacement with 409', function () {
     $maker = bankStaff();
     $request = FundingRequest::factory()->published()->create();
     $active = marketOffer($maker, $request);
-    $replacement = Offer::factory()->create(['bank_id' => $maker->membership->bank_id, 'created_by' => $maker->id, 'funding_request_id' => $request->id]);
+    $replacement = Offer::factory()
+        ->create([
+            'bank_id' => $maker->membership->bank_id,
+            'created_by' => $maker->id,
+            'funding_request_id' => $request->id,
+        ]);
     app(ManageOffers::class)->submit($maker, $replacement);
     $approval = OfferApproval::query()->sole();
     $approver = bankStaff(BankRole::Approver, $maker->membership->bank);
     signInUser($approver);
-    $this->postJson(route('api.offers.review', ['offer' => $replacement, 'approval' => $approval]), ['decision' => 'approve'])->assertConflict();
+    $this->postJson(route('api.offers.review', ['offer' => $replacement, 'approval' => $approval]), [
+        'decision' => 'approve',
+    ])->assertConflict();
     signInUser($maker);
-    $this->postJson(route('api.offers.withdraw', $active), ['reason' => 'Replacing financial terms.'])->assertOk()->assertJsonPath('data.status', 'withdrawn');
+    $this->postJson(route('api.offers.withdraw', $active), ['reason' => 'Replacing financial terms.'])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'withdrawn');
     signInUser($approver);
-    $this->postJson(route('api.offers.review', ['offer' => $replacement, 'approval' => $approval]), ['decision' => 'approve'])->assertOk();
+    $this->postJson(route('api.offers.review', ['offer' => $replacement, 'approval' => $approval]), [
+        'decision' => 'approve',
+    ])->assertOk();
     expect($replacement->fresh()->label_number)->toBe(2);
     expect($replacement->fresh()->borrower_token)->not->toBe($active->borrower_token);
 });
@@ -194,10 +244,19 @@ it('publishes only safe anonymous fields and excludes drafts suspended lenders a
     $hidden = marketOffer(bankStaff(), $request);
     $hidden->bank->forceFill(['status' => BankStatus::Suspended])->save();
     signInUser($borrower);
-    $response = $this->getJson(route('api.funding.offers', $request))->assertOk()->assertJsonCount(1, 'data.offers')->assertJsonPath('data.offers.0.label', 'Offer 1');
-    expect(array_keys($response->json('data.offers.0')))->toBe(['token', 'label', 'rate', 'collateral', 'interestPayment', 'validUntil']);
-    expect($response->getContent())->not->toContain('Hidden Lender Alpha')->not->toContain($offer->id)->not->toContain($offer->settlement_instruction_id)->not->toContain('treasury@synthetic.example');
-    $this->get(route('funding.offers', $request))->assertOk()->assertDontSee('Hidden Lender Alpha')->assertDontSee($offer->id);
+    $response = $this->getJson(route('api.funding.offers', $request))
+        ->assertOk()
+        ->assertJsonCount(1, 'data.offers')
+        ->assertJsonPath('data.offers.0.label', 'Offer 1');
+    expect(array_keys($response->json('data.offers.0')))
+        ->toBe(['token', 'label', 'rate', 'collateral', 'interestPayment', 'validUntil']);
+    expect($response->getContent())->not->toContain('Hidden Lender Alpha')->not->toContain($offer->id)->not->toContain(
+        $offer->settlement_instruction_id
+    )->not->toContain('treasury@synthetic.example');
+    $this->get(route('funding.offers', $request))
+        ->assertOk()
+        ->assertDontSee('Hidden Lender Alpha')
+        ->assertDontSee($offer->id);
     signInUser($lender);
     $this->getJson(route('api.funding.offers', $request))->assertNotFound();
 });
@@ -270,8 +329,10 @@ it('requires a rejection reason and refuses a completed offer review replay with
     signInUser(bankStaff(BankRole::Approver, $maker->membership->bank));
     $route = route('api.offers.review', ['offer' => $offer, 'approval' => $approval]);
     $this->postJson($route, ['decision' => 'reject'])->assertUnprocessable()->assertJsonValidationErrors('reason');
-    $this->postJson($route, ['decision' => 'reject', 'reason' => 'Collateral terms require revision.'])->assertOk()->assertJsonPath('data.status', 'draft');
-    expect($approval->fresh()->status)->toBe('rejected');
+    $this->postJson($route, ['decision' => 'reject', 'reason' => 'Collateral terms require revision.'])
+        ->assertOk()
+        ->assertJsonPath('data.status', 'draft');
+    expect($approval->fresh()->status->value)->toBe('rejected');
     $this->postJson($route, ['decision' => 'approve'])->assertConflict();
 });
 
@@ -282,7 +343,9 @@ it('rechecks request cutoff at lender approval before the expiry job runs with 4
     $offer->fundingRequest->forceFill(['bidding_deadline' => now()])->save();
     signInUser(bankStaff(BankRole::Approver, $maker->membership->bank));
 
-    $this->postJson(route('api.offers.review', ['offer' => $offer, 'approval' => OfferApproval::query()->sole()]), ['decision' => 'approve'])->assertConflict();
+    $this->postJson(route('api.offers.review', ['offer' => $offer, 'approval' => OfferApproval::query()->sole()]), [
+        'decision' => 'approve',
+    ])->assertConflict();
     expect($offer->fresh()->active_slot)->toBeNull();
 });
 
@@ -291,8 +354,14 @@ it('excludes settlement instruction references from an owned auditor offer respo
     $offer = Offer::factory()->active()->create(['bank_id' => $auditor->membership->bank_id]);
     signInUser($auditor);
 
-    $this->getJson(route('api.offers.show', $offer))->assertOk()->assertJsonMissingPath('data.instructionId')->assertJsonMissingPath('data.instructionVersion');
-    $this->get(route('offers.show', $offer))->assertOk()->assertDontSee('Review approved instructions')->assertDontSee('DEMO000012345678');
+    $this->getJson(route('api.offers.show', $offer))
+        ->assertOk()
+        ->assertJsonMissingPath('data.instructionId')
+        ->assertJsonMissingPath('data.instructionVersion');
+    $this->get(route('offers.show', $offer))
+        ->assertOk()
+        ->assertDontSee('Review approved instructions')
+        ->assertDontSee('DEMO000012345678');
 });
 
 it('escapes internal lender review notes in owned offer history', function () {
@@ -302,7 +371,10 @@ it('escapes internal lender review notes in owned offer history', function () {
     OfferApproval::factory()->create(['offer_id' => $offer->id, 'status' => 'rejected', 'reason' => $dangerous]);
     signInUser($maker);
 
-    $this->get(route('offers.show', $offer))->assertOk()->assertSee(e($dangerous), false)->assertDontSee($dangerous, false);
+    $this->get(route('offers.show', $offer))
+        ->assertOk()
+        ->assertSee(e($dangerous), false)
+        ->assertDontSee($dangerous, false);
 });
 
 it('rejects a stale actor session during locked offer revalidation', function () {
@@ -310,7 +382,8 @@ it('rejects a stale actor session during locked offer revalidation', function ()
     $offer = Offer::factory()->create(['bank_id' => $maker->membership->bank_id, 'created_by' => $maker->id]);
     User::query()->whereKey($maker->id)->increment('auth_version');
 
-    expect(fn () => app(ManageOffers::class)->submit($maker, $offer))->toThrow(HttpException::class, 'Please sign in again.');
+    expect(fn () => app(ManageOffers::class)->submit($maker, $offer))
+        ->toThrow(HttpException::class, 'Please sign in again.');
     expect($offer->fresh()->status)->toBe(OfferStatus::Draft);
     $this->assertDatabaseCount('offer_approvals', 0);
 });

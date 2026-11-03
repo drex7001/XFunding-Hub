@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\SettlementInstructionStatus;
 use Database\Factories\SettlementInstructionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -19,7 +20,14 @@ class SettlementInstruction extends Model
 
     protected function casts(): array
     {
-        return ['details' => 'encrypted:array', 'bank_profile' => 'array', 'version' => 'integer', 'reviewed_at' => 'immutable_datetime', 'retired_at' => 'immutable_datetime'];
+        return [
+            'status' => SettlementInstructionStatus::class,
+            'details' => 'encrypted:array',
+            'bank_profile' => 'array',
+            'version' => 'integer',
+            'reviewed_at' => 'immutable_datetime',
+            'retired_at' => 'immutable_datetime',
+        ];
     }
 
     public function bank(): BelongsTo
@@ -46,6 +54,10 @@ class SettlementInstruction extends Model
     /** @return array<string, string> */
     public static function profileOf(Bank $bank): array
     {
-        return ['name' => $bank->name, 'country_code' => $bank->country_code, 'registration_number' => $bank->registration_number];
+        return [
+            'name' => $bank->name,
+            'country_code' => $bank->country_code,
+            'registration_number' => $bank->registration_number,
+        ];
     }
 }

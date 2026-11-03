@@ -38,7 +38,12 @@ class FundingRequestFactory extends Factory
             'borrower_profile' => function (array $attributes): array {
                 $bank = Bank::query()->findOrFail($attributes['bank_id']);
 
-                return ['name' => $bank->name, 'country_code' => $bank->country_code, 'registration_number' => $bank->registration_number, 'background' => $attributes['borrower_background']];
+                return [
+                    'name' => $bank->name,
+                    'country_code' => $bank->country_code,
+                    'registration_number' => $bank->registration_number,
+                    'background' => $attributes['borrower_background'],
+                ];
             },
         ]);
     }

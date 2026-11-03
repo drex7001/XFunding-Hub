@@ -14,7 +14,13 @@ class BankMembershipFactory extends Factory
     /** @return array<string, mixed> */
     public function definition(): array
     {
-        return ['bank_id' => Bank::factory(), 'user_id' => User::factory(), 'roles' => [BankRole::Maker->value], 'active' => true, 'version' => 0];
+        return [
+            'bank_id' => Bank::factory(),
+            'user_id' => User::factory(),
+            'roles' => [BankRole::Maker->value],
+            'active' => true,
+            'version' => 0,
+        ];
     }
 
     public function admin(): static

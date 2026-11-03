@@ -12,7 +12,12 @@ return new class extends Migration
      * @var array<string, array<int, string>>
      */
     private array $indexes = [
-        'deals' => ['borrower_bank_id', 'lender_bank_id', 'settlement_instruction_id', 'borrower_settlement_instruction_id'],
+        'deals' => [
+            'borrower_bank_id',
+            'lender_bank_id',
+            'settlement_instruction_id',
+            'borrower_settlement_instruction_id',
+        ],
         'deal_disputes' => ['deal_id'],
         'deal_instruction_changes' => ['deal_id'],
         'selection_proposals' => ['funding_request_id', 'offer_id'],

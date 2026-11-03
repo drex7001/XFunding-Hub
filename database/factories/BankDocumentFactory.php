@@ -13,6 +13,13 @@ class BankDocumentFactory extends Factory
     /** @return array<string, mixed> */
     public function definition(): array
     {
-        return ['bank_id' => Bank::factory(), 'uploaded_by' => User::factory(), 'original_name' => 'audit-report.pdf', 'path' => 'onboarding/'.fake()->uuid().'.pdf', 'mime_type' => 'application/pdf', 'size' => 1024];
+        return [
+            'bank_id' => Bank::factory(),
+            'uploaded_by' => User::factory(),
+            'original_name' => 'audit-report.pdf',
+            'path' => 'onboarding/'.fake()->uuid().'.pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 1024,
+        ];
     }
 }

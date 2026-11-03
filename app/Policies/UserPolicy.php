@@ -21,6 +21,8 @@ class UserPolicy
             return Response::denyAsNotFound();
         }
 
-        return $account->id === $user->id ? Response::deny('You cannot change your own platform account.') : Response::allow();
+        return $account->id === $user->id
+            ? Response::deny('You cannot change your own platform account.')
+            : Response::allow();
     }
 }

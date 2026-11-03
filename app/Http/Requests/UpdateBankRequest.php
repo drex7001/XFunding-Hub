@@ -21,7 +21,12 @@ class UpdateBankRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:180'],
             'country_code' => ['required', 'regex:/^[A-Z]{2}$/'],
-            'registration_number' => ['required', 'string', 'max:100', Rule::unique('banks')->ignore($this->route('bank'))],
+            'registration_number' => [
+                'required',
+                'string',
+                'max:100',
+                Rule::unique('banks')->ignore($this->route('bank')),
+            ],
             'requested_capabilities' => ['required', 'array', 'min:1', 'max:2'],
             'requested_capabilities.*' => ['required', Rule::in(['borrower', 'lender']), 'distinct'],
             'bank_id' => ['prohibited'],

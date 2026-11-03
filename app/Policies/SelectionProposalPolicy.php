@@ -18,12 +18,16 @@ class SelectionProposalPolicy
 
     public function create(User $user, FundingRequest $request): bool
     {
-        return $this->viewAny($user, $request)->allowed() && $user->membership->bank->can_borrow && $user->hasBankRole(BankRole::Maker);
+        return $this->viewAny($user, $request)->allowed()
+            && $user->membership->bank->can_borrow
+            && $user->hasBankRole(BankRole::Maker);
     }
 
     public function review(User $user, SelectionProposal $proposal): bool
     {
         return $this->viewAny($user, $proposal->fundingRequest)->allowed()
-            && $user->membership->bank->can_borrow && $user->hasBankRole(BankRole::Approver) && $proposal->proposed_by !== $user->id;
+            && $user->membership->bank->can_borrow
+                && $user->hasBankRole(BankRole::Approver)
+                && $proposal->proposed_by !== $user->id;
     }
 }

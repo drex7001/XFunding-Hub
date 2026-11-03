@@ -12,7 +12,9 @@ it('sends browser hardening headers on every response', function () {
 });
 
 it('adds strict transport security only over HTTPS', function () {
-    $this->get('https://localhost/login')->assertOk()->assertHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    $this->get('https://localhost/login')
+        ->assertOk()
+        ->assertHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
 });
 
 it('leaves local debug error pages working by omitting the content security policy', function () {

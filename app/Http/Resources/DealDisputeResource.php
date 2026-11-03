@@ -12,8 +12,16 @@ class DealDisputeResource extends JsonResource
     public function toArray(Request $request): array
     {
         $user = $request->user();
-        $data = ['id' => $this->id, 'status' => $this->status, 'openedAt' => $this->created_at->toIso8601String(), 'resolvedAt' => $this->resolved_at?->toIso8601String()];
-        if ($user->membership?->bank_id === $this->bank_id && ($user->hasBankRole(BankRole::Maker) || $user->hasBankRole(BankRole::Approver))) {
+        $data = [
+            'id' => $this->id,
+            'status' => $this->status->value,
+            'openedAt' => $this->created_at->toIso8601String(),
+            'resolvedAt' => $this->resolved_at?->toIso8601String(),
+        ];
+        if (
+            $user->membership?->bank_id === $this->bank_id
+            && ($user->hasBankRole(BankRole::Maker) || $user->hasBankRole(BankRole::Approver))
+        ) {
             $data['description'] = $this->description;
             $data['resolutionNote'] = $this->resolution_note;
         }

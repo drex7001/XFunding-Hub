@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\ApprovalStatus;
 use App\BankStatus;
 use App\FundingRequestStatus;
 use Database\Factories\FundingRequestFactory;
@@ -15,7 +16,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['bank_id', 'created_by', 'title', 'amount_minor', 'currency', 'tenor_days', 'settlement_date', 'bidding_deadline', 'day_count', 'rate_basis', 'borrower_background'])]
+#[Fillable([
+    'bank_id',
+    'created_by',
+    'title',
+    'amount_minor',
+    'currency',
+    'tenor_days',
+    'settlement_date',
+    'bidding_deadline',
+    'day_count',
+    'rate_basis',
+    'borrower_background',
+])]
 class FundingRequest extends Model
 {
     /** @use HasFactory<FundingRequestFactory> */
@@ -67,7 +80,10 @@ class FundingRequest extends Model
 
     public function currentStatus(): FundingRequestStatus
     {
-        if (in_array($this->status, [FundingRequestStatus::Open, FundingRequestStatus::PendingApproval], true) && ! $this->bidding_deadline->isFuture()) {
+        if (
+            in_array($this->status, [FundingRequestStatus::Open, FundingRequestStatus::PendingApproval], true)
+            && ! $this->bidding_deadline->isFuture()
+        ) {
             return FundingRequestStatus::Expired;
         }
 
@@ -76,7 +92,11 @@ class FundingRequest extends Model
 
     public function isEditable(): bool
     {
-        return in_array($this->currentStatus(), [FundingRequestStatus::Draft, FundingRequestStatus::PendingApproval], true)
+        return in_array(
+            $this->currentStatus(),
+            [FundingRequestStatus::Draft, FundingRequestStatus::PendingApproval],
+            true,
+        )
             && ($this->pendingApproval === null || $this->pendingApproval->kind === 'publish');
     }
 
@@ -84,7 +104,11 @@ class FundingRequest extends Model
     {
         return $query->where('status', FundingRequestStatus::Open->value)
             ->where('bidding_deadline', '>', now())
-            ->whereHas('bank', fn (Builder $bank): Builder => $bank->where('status', BankStatus::Verified->value)->where('can_borrow', true));
+            ->whereHas(
+                'bank',
+                fn (Builder $bank): Builder => $bank->where('status', BankStatus::Verified->value)
+                    ->where('can_borrow', true),
+            );
     }
 
     public function bank(): BelongsTo
@@ -104,7 +128,7 @@ class FundingRequest extends Model
 
     public function pendingApproval(): HasOne
     {
-        return $this->hasOne(FundingRequestApproval::class)->where('status', 'pending');
+        return $this->hasOne(FundingRequestApproval::class)->where('status', ApprovalStatus::Pending);
     }
 
     public function offers(): HasMany
@@ -114,7 +138,7 @@ class FundingRequest extends Model
 
     public function pendingSelection(): HasOne
     {
-        return $this->hasOne(SelectionProposal::class)->where('status', 'pending');
+        return $this->hasOne(SelectionProposal::class)->where('status', ApprovalStatus::Pending);
     }
 
     public function deal(): HasOne

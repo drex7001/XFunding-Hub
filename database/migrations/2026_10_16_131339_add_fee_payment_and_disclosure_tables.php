@@ -100,7 +100,16 @@ return new class extends Migration
         }
         Schema::table('deals', function (Blueprint $table): void {
             $table->dropIndex(['status', 'fee_deadline']);
-            $table->dropColumn(['fee_amount_minor', 'fee_currency', 'fee_policy', 'fee_quoted_at', 'fee_deadline', 'unlocked_at', 'cancelled_at', 'instructions_updated_at']);
+            $table->dropColumn([
+                'fee_amount_minor',
+                'fee_currency',
+                'fee_policy',
+                'fee_quoted_at',
+                'fee_deadline',
+                'unlocked_at',
+                'cancelled_at',
+                'instructions_updated_at',
+            ]);
         });
     }
 };

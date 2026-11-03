@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\ApprovalStatus;
 use App\BankStatus;
 use App\FundingRequestStatus;
 use App\OfferStatus;
+use App\SettlementInstructionStatus;
 use Database\Factories\OfferFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -16,7 +18,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
-#[Fillable(['funding_request_id', 'bank_id', 'created_by', 'settlement_instruction_id', 'rate_units', 'collateral', 'interest_payment', 'valid_until'])]
+#[Fillable([
+    'funding_request_id',
+    'bank_id',
+    'created_by',
+    'settlement_instruction_id',
+    'rate_units',
+    'collateral',
+    'interest_payment',
+    'valid_until',
+])]
 #[Hidden(['bank_id', 'created_by', 'contributor_ids', 'settlement_instruction_id', 'borrower_token'])]
 class Offer extends Model
 {
@@ -32,12 +43,27 @@ class Offer extends Model
 
     protected function casts(): array
     {
-        return ['status' => OfferStatus::class, 'rate_units' => 'integer', 'version' => 'integer', 'label_number' => 'integer', 'contributor_ids' => 'array', 'valid_until' => 'immutable_datetime', 'activated_at' => 'immutable_datetime'];
+        return [
+            'status' => OfferStatus::class,
+            'rate_units' => 'integer',
+            'version' => 'integer',
+            'label_number' => 'integer',
+            'contributor_ids' => 'array',
+            'valid_until' => 'immutable_datetime',
+            'activated_at' => 'immutable_datetime',
+        ];
     }
 
     protected function rate(): Attribute
     {
-        return Attribute::make(get: fn (): string => intdiv($this->rate_units, 10000).'.'.str_pad((string) ($this->rate_units % 10000), 4, '0', STR_PAD_LEFT));
+        return Attribute::make(
+            get: fn (): string => intdiv($this->rate_units, 10000).'.'.str_pad(
+                (string) ($this->rate_units % 10000),
+                4,
+                '0',
+                STR_PAD_LEFT,
+            )
+        );
     }
 
     public static function rateToUnits(string $rate): int
@@ -50,7 +76,10 @@ class Offer extends Model
     public function currentStatus(): OfferStatus
     {
         if (in_array($this->status, [OfferStatus::Active, OfferStatus::PendingApproval], true)) {
-            if (! $this->valid_until->isFuture() || $this->fundingRequest->currentStatus() === FundingRequestStatus::Expired) {
+            if (
+                ! $this->valid_until->isFuture()
+                || $this->fundingRequest->currentStatus() === FundingRequestStatus::Expired
+            ) {
                 return OfferStatus::Expired;
             }
             if ($this->fundingRequest->status === FundingRequestStatus::Cancelled) {
@@ -69,7 +98,8 @@ class Offer extends Model
             && $this->bank->status === BankStatus::Verified && $this->bank->can_lend
             && $this->bank_id !== $this->fundingRequest->bank_id
             && $this->settlementInstruction->bank_id === $this->bank_id
-            && $this->settlementInstruction->status === 'approved' && $this->settlementInstruction->matchesBankProfile();
+            && $this->settlementInstruction->status === SettlementInstructionStatus::Approved
+                && $this->settlementInstruction->matchesBankProfile();
     }
 
     /**
@@ -98,6 +128,6 @@ class Offer extends Model
 
     public function pendingApproval(): HasOne
     {
-        return $this->hasOne(OfferApproval::class)->where('status', 'pending');
+        return $this->hasOne(OfferApproval::class)->where('status', ApprovalStatus::Pending);
     }
 }
