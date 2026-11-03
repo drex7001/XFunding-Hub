@@ -72,6 +72,22 @@ it('preserves encrypted paid history, files, identities and PostgreSQL sequences
     $this->getJson(route('api.deals.settlement', $deal))->assertOk()->assertJsonPath('data.instructions.accountNumber', 'DEMO000012345678');
 });
 
+it('ignores the retired loan sample table in an older snapshot', function () {
+    requirePostgresImportTarget();
+    $this->freezeTime();
+    enableDemoPayments();
+    Storage::fake('private');
+    $source = sqliteDemoSource();
+    $snapshot = new PDO('sqlite:'.$source['path']);
+    $snapshot->exec('CREATE TABLE loan_applications (id integer primary key, customer_id varchar)');
+    $snapshot->exec("INSERT INTO loan_applications (customer_id) VALUES ('sample')");
+    unset($snapshot);
+
+    $counts = app(CopySqliteDemoToPostgres::class)->handle($source['path']);
+
+    expect($counts)->not->toHaveKey('loan_applications')->and($counts['deals'])->toBe(1);
+});
+
 it('validates import as a dry run without writing target records or the source', function () {
     requirePostgresImportTarget();
     $this->freezeTime();

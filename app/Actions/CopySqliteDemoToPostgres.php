@@ -11,7 +11,7 @@ use RuntimeException;
 
 class CopySqliteDemoToPostgres
 {
-    private const EXCLUDED = ['migrations', 'sessions', 'password_reset_tokens', 'cache', 'cache_locks'];
+    private const EXCLUDED = ['migrations', 'sessions', 'password_reset_tokens', 'cache', 'cache_locks', 'loan_applications'];
 
     private const ENCRYPTED = [
         'settlement_instructions' => ['details'],

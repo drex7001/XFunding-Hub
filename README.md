@@ -29,7 +29,7 @@ Bank onboarding, access control, funding requests, blind offer selection, demo f
 - Institution audit history, platform account administration, instruction version retirement and reinstatement of revoked staff.
 - A role-aware Home page, a progress tracker and one clear next step on every request, offer and deal.
 
-The demo workflow is verified on PostgreSQL, including concurrent sessions and an isolated backup restore. Live preparation remains in [the delivery plan](docs/04-delivery-plan.md). Payments currently use a synthetic local/test adapter; no real money is collected and it is disabled in production. Settlement records are bank attestations, not independent verification of an interbank transfer. The previous sample loan endpoints are disabled; their old models/states are retained as unused sample code.
+The demo workflow is verified on PostgreSQL, including concurrent sessions and an isolated backup restore. Live preparation remains in [the delivery plan](docs/04-delivery-plan.md). Payments currently use a synthetic local/test adapter; no real money is collected and it is disabled in production. Settlement records are bank attestations, not independent verification of an interbank transfer.
 
 ## Local setup
 
@@ -191,7 +191,7 @@ lerd php artisan migrate --no-interaction
 lerd php artisan db:seed --class=DemoMarketplaceSeeder
 ~~~
 
-Deals selected earlier have no borrower receiving version. Open ones cannot be paid or settled until a borrower maker proposes a version on the deal page and a different approver approves it. Their lender disclosure stays available, and closed deals are unaffected.
+The migration also drops the retired `loan_applications` sample table. Deals selected earlier have no borrower receiving version. Open ones cannot be paid or settled until a borrower maker proposes a version on the deal page and a different approver approves it. Their lender disclosure stays available, and closed deals are unaffected.
 
 ## Tests
 
@@ -201,7 +201,7 @@ lerd php vendor/bin/pest --configuration=phpunit.pgsql.xml --compact
 lerd php vendor/bin/pint --dirty --format agent
 ~~~
 
-Tests use isolated PostgreSQL and in-memory SQLite databases with fake mail/storage. They cover bank isolation, maker–checker approvals, private downloads, exact amounts, immutable snapshots, anonymous comparison, winner constraints, authenticated payment notifications, atomic unlock/settlement, restricted disclosure, refund review, corrective instruction changes, disputes, role-based notifications and bounded query counts. The latest PostgreSQL run passed **544 tests / 2,870 assertions**. The SQLite run passed 532 tests / 2,805 assertions, with 12 PostgreSQL-only tests skipped. `RenderedFormsJourneyTest` submits only what the rendered forms contain, like a browser, following the Home page from draft to settled.
+Tests use isolated PostgreSQL and in-memory SQLite databases with fake mail/storage. They cover bank isolation, maker–checker approvals, private downloads, exact amounts, immutable snapshots, anonymous comparison, winner constraints, authenticated payment notifications, atomic unlock/settlement, restricted disclosure, refund review, corrective instruction changes, disputes, role-based notifications and bounded query counts. The latest PostgreSQL run passed **517 tests / 2,845 assertions**. The SQLite run passed 504 tests / 2,777 assertions, with 13 PostgreSQL-only tests skipped. `RenderedFormsJourneyTest` submits only what the rendered forms contain, like a browser, following the Home page from draft to settled.
 
 phpunit.xml forces an in-memory SQLite database. phpunit.pgsql.xml forces the local Lerd database xfunding_hub_testing; never point it at retained data. Concurrency tests deliberately rebuild that test database and must run serially, without --parallel. They synchronize separate PostgreSQL backend sessions for competing selections, duplicate/extra payment receipts and simultaneous settlement approvals. The complete HTTP journey exercises both possible lender winners, refund review, disclosure and settlement without a real payment provider.
 

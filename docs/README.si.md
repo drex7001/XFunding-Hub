@@ -6,7 +6,7 @@
 
 **Implementation:** Foundation, bank access, funding requests, blind offers/selection, demo fee verification/disclosure සහ දෙපාර්ශ්වයේ settlement attestations/disputes implement කරලා තිබෙනවා. Role-based in-app notifications, deal timeline, borrower receiving instructions සහ role-aware Home page එකක් ද තිබෙනවා. Run instructions සඳහා [project README](../README.si.md) බලන්න. PostgreSQL තෝරා local app/history migrate කර concurrent database sessions සහ backup restore verify කළා. Actual payment integration, MFA සහ production operational checks තවම pending.
 
-මේ documents වලින් B2B interbank liquidity marketplace එකේ පළමු version එකට අවශ්‍ය දේ සහ ඒවා කරන පිළිවෙළ විස්තර කරනවා. දැනට repository එකේ තිබෙන test application එකේ models, endpoints, statuses හෝ database schema මේ සැලැස්මේ requirements නොවේ.
+මේ documents වලින් B2B interbank liquidity marketplace එකේ පළමු version එකට අවශ්‍ය දේ සහ ඒවා කරන පිළිවෙළ විස්තර කරනවා.
 
 ## කියවන පිළිවෙළ
 

@@ -159,10 +159,11 @@ An independent review of Phases 0–6 found the issues below. All of them are co
 - [x] The selected lender no longer sees the comparison label. Selection, fee verification and reservation closure notify both banks. The funding-request link is hidden when the request cannot be read.
 - [x] Revoked staff can be reinstated with independent approval, and unused instruction versions can be retired.
 - [x] Foreign-key lookup indexes, browser hardening headers and the `symfony/mime` security update.
+- [x] The retired loan sample is removed: its code, states, tests, Postman collection, Spatie dependency and empty database table.
 
 **Validation — 2026-11-03:** PostgreSQL suite **492 tests / 2,188 assertions pass**. SQLite suite **480 tests / 2,123 assertions pass**, with 12 PostgreSQL-only tests skipped. A temporary sweep called every parameterised route as an unrelated bank user holding all four roles; all 82 requests were denied. A second sweep found no lender identity in ordinary borrower views before or after the fee. These changes were exercised through HTTP feature tests, not a browser walkthrough.
 
-**Still open:** long-line and status-string cleanup, and removal of the retired loan sample code, which needs approval because it deletes tests.
+**Still open:** long-line and status-string cleanup.
 
 ## Interface and flow — 2026-11-03
 
@@ -172,7 +173,7 @@ An independent review of Phases 0–6 found the issues below. All of them are co
 - [x] Single-table offer comparison with one receiving-account choice, and one-step offer submission.
 - [x] Grouped money, readable dates and short references; a rewritten design system with mobile navigation and no new dependency.
 
-**Validation — 2026-11-03:** PostgreSQL suite **544 tests / 2,870 assertions pass**. SQLite suite **532 tests / 2,805 assertions pass**, with 12 PostgreSQL-only tests skipped. `RenderedFormsJourneyTest` submits only what the rendered forms contain and follows Home from draft to settled; deliberately broken fields and links made it fail. The authorization sweep (82 of 82 requests denied) and the lender-identity sweep were repeated with Home included. Screens were checked in headless-Chrome screenshots of rendered pages at desktop and mobile widths. A live click-through in a running browser has not been done.
+**Validation — 2026-11-03:** After the loan sample removal, the PostgreSQL suite **517 tests / 2,845 assertions pass**. SQLite suite **504 tests / 2,777 assertions pass**, with 13 PostgreSQL-only tests skipped. `RenderedFormsJourneyTest` submits only what the rendered forms contain and follows Home from draft to settled; deliberately broken fields and links made it fail. The authorization sweep (82 of 82 requests denied) and the lender-identity sweep were repeated with Home included. Screens were checked in headless-Chrome screenshots of rendered pages at desktop and mobile widths. A live click-through in a running browser has not been done.
 
 ## Handover for each phase
 

@@ -159,10 +159,11 @@ Pint, compiled Blade syntax (files 95), Markdown links සහ whitespace checks 
 - [x] Selected lender ට comparison label එක තවදුරටත් පෙනෙන්නේ නැහැ. Selection, fee verification සහ reservation closure ගැන banks දෙකටම notify කරනවා. Request එක කියවිය නොහැකි විට funding-request link එක hide කරනවා.
 - [x] Revoke කළ staff independent approval එකකින් reinstate කළ හැකියි; භාවිතා නොවන instruction versions retire කළ හැකියි.
 - [x] Foreign-key lookup indexes, browser hardening headers සහ `symfony/mime` security update එක.
+- [x] Retired loan sample එක ඉවත් කළා: එහි code, states, tests, Postman collection, Spatie dependency සහ හිස් database table එක.
 
 **Validation — 2026-11-03:** PostgreSQL suite **tests 492 / assertions 2,188 pass**. SQLite suite **tests 480 / assertions 2,123 pass**, PostgreSQL-only tests 12ක් skip වේ. තාවකාලික sweep එකකින් roles හතරම ඇති unrelated bank user කෙනෙක් ලෙස සෑම parameterised route එකක්ම call කළා; requests 82ම deny වුණා. දෙවන sweep එකකින් fee එකට පෙර හෝ පසු ordinary borrower views වල lender identity හමු වුණේ නැහැ. මේ වෙනස්කම් test කළේ HTTP feature tests මඟින්; browser walkthrough එකක් කළේ නැහැ.
 
-**තවම ඉතිරි:** long-line සහ status-string cleanup, සහ retired loan sample code ඉවත් කිරීම. එයින් tests delete වන නිසා approval අවශ්‍යයි.
+**තවම ඉතිරි:** long-line සහ status-string cleanup.
 
 ## Interface සහ flow — 2026-11-03
 
@@ -172,7 +173,7 @@ Pint, compiled Blade syntax (files 95), Markdown links සහ whitespace checks 
 - [x] එක් receiving-account තේරීමක් සහිත single-table offer comparison එකක් සහ එක පියවරකින් offer submission.
 - [x] Group කළ මුදල්, කියවිය හැකි දින සහ කෙටි references; mobile navigation සහිත, අලුත් dependency නැති නැවත ලියූ design system එකක්.
 
-**Validation — 2026-11-03:** PostgreSQL suite **tests 544 / assertions 2,870 pass**. SQLite suite **tests 532 / assertions 2,805 pass**, PostgreSQL-only tests 12ක් skip වේ. `RenderedFormsJourneyTest` render වූ forms වල ඇති දේ පමණක් submit කර Home අනුව draft සිට settled දක්වා යනවා; හිතාමතා කැඩූ fields සහ links මඟින් එය fail වුණා. Authorization sweep එක (requests 82න් 82ම deny) සහ lender-identity sweep එක Home ද ඇතුළුව නැවත කළා. Screens පරීක්ෂා කළේ desktop සහ mobile පළලින් render වූ pages වල headless-Chrome screenshots මඟින්. Run වන browser එකක live click-through එකක් තවම කළේ නැහැ.
+**Validation — 2026-11-03:** Loan sample එක ඉවත් කළ පසු PostgreSQL suite **tests 517 / assertions 2,845 pass**. SQLite suite **tests 504 / assertions 2,777 pass**, PostgreSQL-only tests 13ක් skip වේ. `RenderedFormsJourneyTest` render වූ forms වල ඇති දේ පමණක් submit කර Home අනුව draft සිට settled දක්වා යනවා; හිතාමතා කැඩූ fields සහ links මඟින් එය fail වුණා. Authorization sweep එක (requests 82න් 82ම deny) සහ lender-identity sweep එක Home ද ඇතුළුව නැවත කළා. Screens පරීක්ෂා කළේ desktop සහ mobile පළලින් render වූ pages වල headless-Chrome screenshots මඟින්. Run වන browser එකක live click-through එකක් තවම කළේ නැහැ.
 
 ## එක් එක් අදියරේ handover එක
 

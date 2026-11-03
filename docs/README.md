@@ -6,7 +6,7 @@
 
 **Implementation:** Foundation, bank access, funding requests, blind offers/selection, demo fee verification/disclosure and settlement attestations/disputes from both parties are implemented. Role-based in-app notifications, a deal timeline, borrower receiving instructions and a role-aware Home page are also in place. See the [project README](../README.md) for run instructions. PostgreSQL was chosen, the local app/history was migrated, and concurrent database sessions and a backup restore were verified. Actual payment integration, MFA and production operational checks are still pending.
 
-These documents describe what the first version of the B2B interbank liquidity marketplace needs and the order in which to build it. The models, endpoints, statuses and database schema of the test application currently in the repository are not requirements of this plan.
+These documents describe what the first version of the B2B interbank liquidity marketplace needs and the order in which to build it.
 
 ## Reading order
 
